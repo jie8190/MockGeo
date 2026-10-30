@@ -1,0 +1,19 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <application android:label="MockGeo 独立定位检查" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false">
+        <activity android:name=".LifecycleProbeActivity" android:exported="true" />
+        <activity android:name=".GnssSensorProbeActivity" android:exported="true" />
+        <activity android:name=".PolicyProbeActivity" android:exported="true" android:launchMode="singleTop" />
+        <receiver android:name=".PolicyProbeReceiver" android:exported="false" />
+        <receiver android:name=".PendingProbeReceiver" android:exported="false" />
+        <activity android:name=".ProbeActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

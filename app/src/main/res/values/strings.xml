@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MockGeo</string>
+    <string name="sim_notification_channel">模拟状态</string>
+    <string name="sim_notification_title">正在模拟位置</string>
+    <string name="sim_notification_stop">停止</string>
+    <string name="err_no_mock_appop">未选择本应用为「模拟位置信息应用」。请到开发者选项设置。</string>
+    <string name="err_no_location_permission">缺少定位权限。</string>
+    <string name="err_no_notification_permission">缺少通知权限，无法常驻显示模拟状态。</string>
+    <string name="err_module_unreachable">LSPosed 模块未激活或不可达。</string>
+    <string name="err_ack_timeout">命令未在超时内确认。</string>
+    <string name="err_engine_crash">引擎内部错误。</string>
+    <string name="err_invalid_config">配置不合法（坐标/参数越界）。</string>
+    <string name="err_fgs_restricted">前台服务启动受限，请回到应用内操作。</string>
+    <string name="err_permission_denied">权限被拒绝。</string>
+    <string name="err_provider_unavailable">定位服务不可用。</string>
+</resources>

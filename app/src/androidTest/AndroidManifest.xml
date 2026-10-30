@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <instrumentation
+        android:name="com.mockgeo.app.DeviceSmokeInstrumentation"
+        android:targetPackage="com.mockgeo.app"
+        android:functionalTest="true"
+        android:handleProfiling="false" />
+</manifest>

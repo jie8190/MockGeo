@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 简单定位图钉图形（24dp 线性风格，自绘，不拷贝原厂资产） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.5"
+        android:scaleY="0.5"
+        android:translateX="27"
+        android:translateY="27">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M54,12c-11,0 -20,9 -20,20c0,15 20,40 20,40s20,-25 20,-40c0,-11 -9,-20 -20,-20zM54,40a8,8 0,1 1,0 -16a8,8 0,0 1,0 16z" />
+    </group>
+</vector>
