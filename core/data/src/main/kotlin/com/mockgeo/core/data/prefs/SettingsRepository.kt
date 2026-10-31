@@ -87,7 +87,7 @@ class SettingsRepository(private val context: Context) {
             satellites = p[Keys.SATELLITES] ?: 12,
             sineSpeedCurve = p[Keys.SINE_CURVE] ?: true,
             mapProvider = p[Keys.MAP_PROVIDER] ?: "amap",
-            amapConsent = p[Keys.AMAP_CONSENT] ?: false,
+            amapConsent = p[Keys.AMAP_CONSENT] ?: true,
             mapSatellite = p[Keys.MAP_SATELLITE] ?: false,
             compatibilityMode = p[Keys.COMPATIBILITY] ?: false,
         )

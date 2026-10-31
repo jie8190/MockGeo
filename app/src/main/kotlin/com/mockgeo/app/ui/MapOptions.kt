@@ -63,8 +63,13 @@ internal fun MapPreferences(vm: HomeViewModel) {
         else -> "需配置 Key 后启用"
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        MapChoice("高德地图", "国内地图、地点搜索与道路规划（$keySourceLabel）", usingAmap, hasAmap) {
-            if (settings.amapConsent) vm.setMapProvider("amap") else consentOpen = true
+        MapChoice("高德地图", "国内地图、地点搜索与道路规划（$keySourceLabel）", usingAmap, true) {
+            if (!hasAmap) {
+                keyDialogOpen = true
+            } else {
+                vm.setAmapConsent(true)
+                vm.setMapProvider("amap")
+            }
         }
         MapChoice("OpenStreetMap", "全球开放地图，免配置即用", !usingAmap, true) { vm.setMapProvider("osm") }
         if (usingAmap) {
