@@ -4,9 +4,68 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Test
 
 class RootXposedBridgeTest {
+    class NativeTargets {
+        fun fails(value: String, second: String, third: String): Boolean = false
+        fun duringInstall(value: String): Boolean = false
+        fun shared(value: String): Boolean = false
+        fun unsupported(value: Double): Double = value
+    }
+
+    @Test fun `failed native install does not report success and releases the slot for retry`() {
+        var attempts = 0
+        val bridge = RootXposedBridge(installNative = { _, _, _, _ -> attempts++; false })
+        val method = NativeTargets::class.java.getDeclaredMethod("fails", String::class.java, String::class.java, String::class.java)
+        val before = bridge.hookedMethodsCount()
+        repeat(10) {
+            assertThrows(IllegalStateException::class.java) { bridge.hook(method).intercept { true } }
+        }
+        assertEquals(10, attempts)
+        assertFalse(bridge.isMethodHooked(method))
+        assertEquals(before, bridge.hookedMethodsCount())
+    }
+
+    @Test fun `native entry can dispatch immediately while installer is still returning`() {
+        val method = NativeTargets::class.java.getDeclaredMethod("duringInstall", String::class.java)
+        var observed: Any? = null
+        val bridge = RootXposedBridge(installNative = { target, _, _, _ ->
+            val slot = ArtBridgePool.acquireSlot(target)!!
+            observed = RootXposedBridge.dispatchFromBridge(slot.key, arrayOf(NativeTargets(), "ready"))
+            true
+        })
+        val handle = bridge.hook(method).intercept { it.getArg(0) == "ready" }
+        assertEquals(true, observed)
+        assertTrue(bridge.isMethodHooked(method))
+        handle.unhook()
+    }
+
+    @Test fun `two bridges hook one native method only once and share its dispatch chain`() {
+        val method = NativeTargets::class.java.getDeclaredMethod("shared", String::class.java)
+        var attempts = 0
+        val install: (java.lang.reflect.Executable, java.lang.reflect.Method, java.lang.reflect.Method, java.lang.reflect.Method) -> Boolean =
+            { _, _, _, _ -> attempts++; true }
+        val first = RootXposedBridge(installNative = install)
+        val second = RootXposedBridge(installNative = install)
+        val calls = mutableListOf<String>()
+        val h1 = first.hook(method).intercept { chain -> calls += "first"; !(chain.proceed() as Boolean) }
+        val h2 = second.hook(method).intercept { calls += "second"; true }
+        assertEquals(1, attempts)
+        assertEquals(false, first.invokeHooked(method, NativeTargets(), arrayOf("value")) { _, _ -> false })
+        assertEquals(listOf("first", "second"), calls)
+        h1.unhook()
+        h2.unhook()
+    }
+
+    @Test fun `unsupported signature and class initializer cannot become successful hooks`() {
+        val bridge = RootXposedBridge(installNative = { _, _, _, _ -> error("Must not install") })
+        val method = NativeTargets::class.java.getDeclaredMethod("unsupported", Double::class.javaPrimitiveType)
+        assertThrows(UnsupportedOperationException::class.java) { bridge.hook(method).intercept { 0.0 } }
+        assertFalse(bridge.isMethodHooked(method))
+        assertThrows(UnsupportedOperationException::class.java) { bridge.hookClassInitializer(NativeTargets::class.java) }
+    }
 
     class SampleService {
         fun registerLocationRequest(req: Any, identity: Any, permLevel: Int, listener: Any) {}

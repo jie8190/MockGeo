@@ -32,6 +32,7 @@ class SimulationSessionTest {
         var updateGate: CompletableDeferred<Unit>? = null
         var stopError: Throwable? = null
         var stopDelayMs = 0L
+        var startupTimeoutMs: Long? = null
 
         private val _state = kotlinx.coroutines.flow.MutableStateFlow<EngineState>(EngineState.Idle)
 
@@ -42,6 +43,7 @@ class SimulationSessionTest {
             requiresExternalModule = false,
             supportsNetworkProvider = true,
             supportsStreamingUpdate = true,
+            startupTimeoutMs = startupTimeoutMs,
         )
 
         override suspend fun start(cfg: SimConfig): Result<Unit> {
@@ -89,6 +91,31 @@ class SimulationSessionTest {
         assertThat(r2).isEqualTo(SimulationSession.RequestOutcome.ACCEPTED)
         assertThat(session.state.value).isEqualTo(EngineState.Idle)
         assertThat(engine.calls).containsExactly("start", "stop").inOrder()
+    }
+
+    @Test
+    fun `first start initialization can exceed ordinary ack timeout while remaining bounded`() = runTest {
+        val engine = FakeEngine().apply {
+            startGate = CompletableDeferred()
+            startupTimeoutMs = 10_000
+        }
+        val session = SimulationSession(engine, TestClock(), RingSimLogger(), backgroundScope, startTtlMs = 3000)
+        val start = backgroundScope.async { session.requestStart(cfg) }
+        runCurrent()
+        advanceTimeBy(3500)
+        runCurrent()
+        assertThat(session.state.value).isInstanceOf(EngineState.Starting::class.java)
+        engine.startGate!!.complete(Unit)
+        assertThat(start.await()).isEqualTo(SimulationSession.RequestOutcome.ACCEPTED)
+        assertThat(session.state.value).isInstanceOf(EngineState.Running::class.java)
+        session.requestStop()
+        engine.startGate = CompletableDeferred()
+        val stalled = backgroundScope.async { session.requestStart(cfg) }
+        runCurrent()
+        advanceTimeBy(10_001)
+        runCurrent()
+        stalled.await()
+        assertThat(session.state.value).isInstanceOf(EngineState.Failed::class.java)
     }
 
     @Test

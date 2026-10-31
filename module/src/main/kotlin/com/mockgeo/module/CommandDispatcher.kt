@@ -107,9 +107,10 @@ object CommandDispatcher {
     }
 
     private fun handlePing(extras: Bundle?) {
+        ModuleRuntime.responseNonce = extras?.getString(ControlPlane.KEY_REQUEST_NONCE).orEmpty().take(64)
         extras?.apply {
             putBoolean(ControlPlane.KEY_PONG, true)
-            putString(ControlPlane.KEY_MODULE_VERSION, StatusWriter.MODULE_VERSION)
+            putString(ControlPlane.KEY_MODULE_VERSION, ModuleRuntime.version)
         }
         StatusWriter.write(ModuleConfig.snapshot())
         ModuleLog.d("PING")

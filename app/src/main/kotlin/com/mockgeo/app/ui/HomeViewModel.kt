@@ -166,7 +166,7 @@ class HomeViewModel(
         controller.updateSettings(prefs)
         val checks = engineChecks(prefs)
         _checks.value = checks
-        val blockers = checks.filter { !it.ok && it.name in setOf("定位权限", "模拟位置 AppOps", "LSPosed 模块安装", "Root 权限", "系统控制通道", "系统定位钩子", "模块版本") }
+        val blockers = checks.filter { !it.ok && it.name in setOf("定位权限", "模拟位置 AppOps", "LSPosed 模块安装", "Root 独立注入", "Root 权限", "系统控制通道", "系统定位钩子", "模块版本") }
         if (blockers.isNotEmpty()) { postMessage(blockers.joinToString("；") { it.message ?: it.name }); return null }
         if (router.currentEngineId != prefs.engineId) router.switch(prefs.engineId).getOrThrow()
         return prefs
@@ -467,7 +467,7 @@ class HomeViewModel(
         return writeGeneratedFile(uri) { Gpx.export("历史位置", points) }
     }
     fun exportDiagnostics(uri: Uri): String? = writeFile(uri, buildString {
-        appendLine("MockGeo 0.4.1 · Android ${android.os.Build.VERSION.RELEASE}")
+        appendLine("MockGeo ${com.mockgeo.app.BuildConfig.VERSION_NAME} · Android ${android.os.Build.VERSION.RELEASE}")
         appendLine("引擎：${router.currentEngineId} / ${sim.value.engineState}")
         appendLine("模式：${sim.value.mode} / 暂停：${sim.value.paused}")
         checks.value.forEach { appendLine("${if (it.ok) "通过" else "未通过"} ${it.name}: ${it.message.orEmpty()}") }

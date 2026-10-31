@@ -2,13 +2,13 @@
 
 <p align="center">
   <strong>Android 现代化高真实度位置与路线模拟工具</strong><br/>
-  支持 <b>标准模式</b> · <b>LSPosed 系统级钩子</b> · <b>Root 直连原生 ART 注入</b> 三擎驱动
+  支持 <b>标准模式</b> · <b>LSPosed 系统级钩子</b> · <b>Root 直连（实验）</b>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Android-8.0%2B%20(API%2026--36)-3DDC84?logo=android&logoColor=white" alt="Android 8.0+"/>
   <img src="https://img.shields.io/badge/Kotlin-2.1%20%2B%20Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin"/>
-  <img src="https://img.shields.io/badge/NDK-C%2B%2B17%20ART%20Trampoline-00599C?logo=cplusplus&logoColor=white" alt="NDK C++17"/>
+  <img src="https://img.shields.io/badge/NDK-C%2B%2B23%20%2F%20LSPlant-00599C?logo=cplusplus&logoColor=white" alt="NDK C++23 / LSPlant"/>
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License MIT"/>
 </p>
 
@@ -16,13 +16,13 @@
 
 ## ✨ 核心特性
 
-### 1. 三种运行引擎，覆盖从免 Root 到系统级深度无痕
+### 1. 运行模式
 - **LSPosed 模式 (`xposed`)**：基于 `libxposed API 100+` 注入 `system_server`，在系统定位服务出口直接合成并分发位置，无需污染系统底层 Provider 缓存，**停止模拟后无需重启即可立即恢复真实物理位置**。
-- **Root 直连模式 (`root`)**：仅需 Root 权限（KernelSU / APatch / Magisk），基于自研 NDK `libmockgeo_art.so`（ARM64 BTI 兼容 `ArtMethod` 蹦床 + 零 Java 栈帧 `Domain::kPlatform` 隐藏 API 解锁 + 模块化 `service-wifi.jar` 复合类加载器），零侵入复用全套系统级定位钩子。
+- **Root 直连 (`root`，实验)**：主应用内置 ARM64 加载器和系统定位载荷，通过 Root 加载并校验独立的系统进程回执，无需另装 MockGeo 模块 APK。已通过真机隔离进程测试，并在 Xiaomi 15 / Android 16 / KernelSU 上完成 **真实 system_server 的纯 Root 系统定位验收**：公开定位 API、WebView、PendingIntent/取消/注销/flush、GNSS/NMEA及动态豁免与停止恢复均通过。当前拒绝与驻留的 LSPosed ART 框架叠加运行，需要先停用 LSPosed 注入并手动重启，或继续使用 LSPosed 模式。Root 路径暂不覆盖应用进程内传感器/SDK 缓存钩子。
 - **标准模式 (`provider`)**：无需 Root，通过 Android 系统「开发者选项 → 模拟位置信息应用」运行。
 
 ### 2. 深度无痕与多维环境证据链同步
-开启 **「深度无痕模式」** 后，自动完成全链路反检测对齐：
+LSPosed 模式提供下列可配置的模拟输出。系统接口验收不代表所有第三方 SDK 或业务都会接受结果，位置模拟也不会改变 IP 地区：
 - **抹除 Mock 标记**：自动清除 `Location.isFromMockProvider` / `isMock()` 与 `Bundle("mockLocation")` 标记，拦截 `AppOpsManager` 的 `OP_MOCK_LOCATION` 审计。
 - **全通道定位覆盖**：同时接管 `GPS`、`Network`、`Fused（GMS/厂商融合定位）`、`Passive` 的 `getLastLocation`、`getCurrentLocation`、`requestLocationUpdates`（含 MIUI / HyperOS `LocationProviderManager.registerAndHandleIdentity` 代理对象精确拦截）以及内核 `WebView navigator.geolocation`。
 - **GNSS 卫星与 NMEA 报文合成**：动态合成 GPS (`L1 1575.42MHz`) + 北斗 Beidou (`B1I 1561.098MHz`) 双星座卫星状态（信噪比 `C/N0`、仰角、方位角、`usedInFix`）及 `$GPGGA` / `$GPRMC` 标准 NMEA 原始语句。
@@ -45,21 +45,24 @@
 
 ## 📦 下载与安装
 
-请前往 [**Releases 页面**](../../releases) 下载最新发行版安装包：
+当前版本：主应用 **0.4.3** · 内置 Root 载荷 **0.1.0** · 可选 LSPosed 模块 **0.3.12**。
+
+[下载 v0.4.3](https://github.com/jie8190/MockGeo/releases/tag/v0.4.3) · [更新日志](CHANGELOG.md) · [验证范围](docs/VERIFICATION_0.4.3.md)
 
 | 安装包文件 | 包名 | 说明 |
 | :--- | :--- | :--- |
-| **`MockGeo-v0.4.1-app.apk`** | `com.mockgeo.app` | **主控端应用**（地图选点、路线规划、悬浮摇杆、参数与模式配置） |
-| **`MockGeo-v0.3.10-module.apk`** | `com.mockgeo.module` | **系统级注入模块 (`v0.3.10`)**（用于 LSPosed / 系统层无痕接管） |
+| **`MockGeo-v0.4.3-app.apk`** | `com.mockgeo.app` | 主应用；Root 载荷已内置，无需另装模块 |
+| **`MockGeo-v0.3.12-module.apk`** | `com.mockgeo.module` | 仅 LSPosed 模式需要；本轮通过构建/单测/Lint，未完成单独真机验收 |
+| `SHA256SUMS.txt` | — | 两个 APK 的 SHA-256 校验值 |
 
 ### 快速上手
 
-1. 安装 `MockGeo-v0.4.1-app.apk` 与 `MockGeo-v0.3.10-module.apk`。
+1. 安装主应用；仅在选择 LSPosed 模式时安装对应模块 APK。
 2. **激活系统级模式**：
    - **使用 LSPosed**：在 LSPosed 管理器中启用 **`MockGeo 模块`**，勾选 **`系统框架 (System Framework)`** 作用域并重启手机（如需对特定第三方 App 启用客户端传感器/Wi-Fi/基站直调拦截，可同时勾选对应 App）。
-   - **使用 Root 直连**：在 KernelSU / APatch / Magisk 中授予 `MockGeo` 超级用户权限。
+   - **Root 直连（实验）**：在 KernelSU / Magisk 中授予主应用超级用户权限；首次开始时加载内置载荷。当前需无 LSPosed 驻留的系统环境，不能将旧 LSPosed 回执当成 Root 成功。
 3. 打开 **MockGeo** $\rightarrow$ 点击右上角 **偏好设置（齿轮）**：
-   - 在 **「运行模式」** 中选择 `LSPosed 模式` 或 `Root 直连模式`；
+   - 在 **「运行模式」** 中选择 `标准模式`、`LSPosed 模式` 或 `Root 直连模式`；
    - 开启 **「深度无痕模式（推荐）」**。
 4. 返回地图主页，点选目的地或规划路线，点击右下角 **「开始模拟」** 即可生效；点击 **「停止模拟」** 立即恢复手机真实物理定位。
 
@@ -80,7 +83,8 @@ MockGeo/
 │   ├── model/            # 核心领域模型 (LatLng, Route, SimConfig, EngineState, CheckResult)
 │   ├── route/            # 路线插值采样器、正弦加减速曲线、GPX 解析与导出器
 │   ├── data/             # Room 数据库 (收藏/历史/路线) 与 DataStore 偏好设置仓库
-│   └── engine/           # 三擎路由器 (ProviderEngine / XposedEngine / RootEngine + NDK libmockgeo_art.so)
+│   └── engine/           # 引擎路由器 (ProviderEngine / XposedEngine / RootEngine + 独立 Root 载荷)
+├── rootpayload/          # 内置 Root Dex 载荷、ARM64 加载器及 LSPlant 适配器
 ├── module/               # 系统级钩子模块 (LocationDelivery, RecipientTable, GnssSynth, EvidenceHooks, SensorHooks)
 └── probe/                # 真机多维定位与生命周期自动化验收探针
 ```
@@ -91,18 +95,18 @@ MockGeo/
 
 ### 环境要求
 - **JDK**：17
-- **Android SDK**：`compileSdk = 36`（Android 16），`NDK 27.0.12077973`，`CMake 3.22.1`
+- **Android SDK**：`compileSdk = 36`（Android 16），`NDK 27.0.12077973`；原有引擎用 `CMake 3.22.1`，Root 载荷需 `CMake >= 3.28` / `Ninja >= 1.11`，可设置 `ROOT_CMAKE` / `ROOT_NINJA`，详见 [Root 构建说明](rootpayload/README.md)。
 
 ### 编译命令
 ```bash
-# 编译主应用与系统模块安装包
-./gradlew :app:assembleDebug :module:assembleDebug
+# 构建公开安装包，忽略本机环境与文件中的个人高德 Key
+./gradlew :app:assembleDebug :module:assembleDebug -PpublicBuild=true
 
 # 运行全模块单元测试
 ./gradlew :core:model:test :core:route:test :core:data:testDebugUnitTest :core:engine:testDebugUnitTest :module:testDebugUnitTest
 ```
 
-> **可选**：若希望在本地编译时直接内置高德地图 Key，可复制 [secrets.properties.example](secrets.properties.example) 为 `secrets.properties`（已被 [.gitignore](.gitignore) 排除，不会提交到 Git）：
+> **可选**：若希望仅在个人本地构建中内置高德 Key，可省略 `-PpublicBuild=true`，再复制 [secrets.properties.example](secrets.properties.example) 为 `secrets.properties`（已被 [.gitignore](.gitignore) 排除，不会提交到 Git）：
 > ```properties
 > amap.apiKey=你的32位高德Key
 > ```
@@ -111,4 +115,4 @@ MockGeo/
 
 ## 📄 开源协议
 
-本项目基于 [MIT License](LICENSE) 开源。
+本项目自有代码基于 [MIT License](LICENSE) 开源。Root 原生组件包含 LGPL-3.0 的 LSPlant，以及 Apache-2.0 / MIT 依赖；对应源码、固定版本及许可说明见 [rootpayload/README.md](rootpayload/README.md)。

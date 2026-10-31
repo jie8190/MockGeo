@@ -148,7 +148,7 @@ private fun MapHome(vm: HomeViewModel) {
             }
         }
     }
-    LaunchedEffect(selected) {
+    LaunchedEffect(map, selected) {
         val selectedOnMap = selected != null && selected == pendingMapSelection
         pendingMapSelection = null
         map.setMarker(selected)
@@ -169,7 +169,7 @@ private fun MapHome(vm: HomeViewModel) {
         slowMap = false
         if (mapStatus.loading) { delay(8000); slowMap = true }
     }
-    LaunchedEffect(settings.mapProvider, settings.amapConsent) {
+    LaunchedEffect(settings.mapProvider, settings.amapConsent, hasAmapKey) {
         if (settings.mapProvider == "amap" && !settings.amapConsent && hasAmapKey) {
             delay(200)
             amapConsentOpen = true
@@ -418,7 +418,7 @@ private fun MapHome(vm: HomeViewModel) {
     if (diagnosticsOpen) DiagnosticsDialog(vm) { diagnosticsOpen = false }
     if (mapOptionsOpen) MapOptionsDialog(vm) { mapOptionsOpen = false }
     if (amapConsentOpen) AmapConsentDialog(onDecline = { amapConsentOpen = false; vm.setMapProvider("osm") }, onAccept = {
-        amapConsentOpen = false; vm.setAmapConsent(true); vm.setMapProvider("amap")
+        amapConsentOpen = false; vm.setAmapConsent(true)
     })
     editingRoutePoint?.let { index ->
         routeControls.getOrNull(index)?.let { point ->

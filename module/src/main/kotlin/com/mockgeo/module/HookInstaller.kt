@@ -79,7 +79,7 @@ object HookInstaller {
         val args = call.args
         val uid = Binder.getCallingUid()
         if (name == "sendExtraCommand") {
-            return if (args.firstOrNull() == ControlPlane.PROVIDER)
+            return if (args.firstOrNull() == ModuleRuntime.provider)
                 CommandDispatcher.intercept(args.getOrNull(1) as? String, args.getOrNull(2) as? android.os.Bundle)
             else call.proceed()
         }

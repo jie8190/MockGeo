@@ -9,3 +9,5 @@
 /secrets.properties
 *.keystore
 *.jks
+__pycache__/
+*.pyc

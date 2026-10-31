@@ -1,0 +1,27 @@
+[
+  {
+    "repo": "LSPosed/LSPlant",
+    "commit": "d8b5d1dbb664abc606644036822e4bb64547edf6",
+    "path": "lsplant"
+  },
+  {
+    "repo": "LSPosed/DexBuilder",
+    "commit": "ac7fb2230954ee311808bad469b0db501f31bfb8",
+    "path": "lsplant/external/dex_builder"
+  },
+  {
+    "repo": "greg7mdp/parallel-hashmap",
+    "commit": "0cd57d29a959256ed66b2afdd1009928fc625d09",
+    "path": "lsplant/external/dex_builder/external/parallel_hashmap"
+  },
+  {
+    "repo": "jmpews/Dobby",
+    "commit": "9c85e74f92eda36b99ddb0fddb17a9df2278a4d3",
+    "path": "dobby"
+  },
+  {
+    "repo": "hexhacking/xDL",
+    "commit": "1e0b6254165a2ddcbd32f77a371700c69155acf8",
+    "path": "xdl"
+  }
+]

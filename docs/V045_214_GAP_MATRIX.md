@@ -153,3 +153,35 @@ rebuild/scripts/verify-compatibility.ps1 -RequiredModule 0.3.8 -Extended -Requir
 新增 4 项回归测试覆盖接口重建共享额度、多 provider、失败回滚及并发新订阅。最终 JVM/debug **149 项通过**（模块 50 项），构建与 Lint 通过，见 `fix-0310-final-check.log`。**0.3.10 补丁仍须实际加载后完成真机回归**；不得沿用 0.3.8/0.3.9 的通过部分来声称全通过。
 
 0.3.10 已完整安装并核对设备哈希：`d6ffeaaf054fcb2db9b076ce682dd0ec964f069b745f850e8c891e61557f9cdd`。用户选择稍后手动重启、先保存进度。当前模拟关闭、原豁免策略已恢复。下次运行 `verify-compatibility.ps1 -RequiredModule 0.3.10 -Extended -RequireSensors`，先确认实际加载版本，再复测；本轮没有自动重启或热点操作。
+
+
+### 8.6 2026-10-31 最新工作区复核：0.4.2 / 0.3.11 候选
+
+后续工作已产生 `compat-0310-device` 报告，本次重新运行四个现有校验器，公开定位 API、生命周期/flush、GNSS/NMEA/传感器、动态策略均通过。因此 §8.5 的“0.3.10 等待重启”是历史状态；本次开始时 USB 列表为空，未重新连接、重启或操作热点。历史报告不构成这次新补丁的真机验收。
+
+| 已确认问题 | 修复与验证范围 |
+|---|---|
+| Root 模式只是复制 SO、初始化应用进程中的 ART 库，然后使用 LSPosed 的控制通道；没有调用跨进程注入器。自检还允许没有 Root、仅系统模块可达时成功 | RootEngine 保留旧配置 ID，但自检/启动明确失败，UI 标记开发中；删除自检中的 su 部署和全局 hidden_api_policy 修改；不再借用 LSPosed 的回执。`root-check` 不再给出假阳性的端到端通过。**Root 独立注入仍未实现** |
+| RootXposedBridge 无桥接槽或 Native 返回 false 时仍返回成功 Handle，且先改原生入口、后发布回调表，存在首个回调查不到记录的窗口 | 无槽/Native 失败抛出错误；先发布 dispatch 元数据、失败回滚/释放槽位；同一方法跨 Bridge 实例共享安装，槽位按 Method（含 ClassLoader 身份）索引；类初始化 Hook 明确报告不支持 |
+| RecipientTable 以 Subscription 对象判断回滚归属；同一对象再次发布后，旧回滚可删掉新注册；外层 remove 与内层 publish 也不是一个原子操作 | 每次发布有独立身份，按 Binder 原子更新不可变 provider 映射；旧回滚不能删除或复活新一轮订阅。两项新回归覆盖复用订阅对象和注销后重注册 |
+| SettingsRepository 缺省把高德授权读作 true；设置页直接写 true，跳过已有授权弹窗；缺 Key 入口保存后不切图 | 默认未授权，HomeScreen 统一处理一个授权弹窗；保存 Key 后继续用户原来的切图意图；切换 Key/地图后重新定位到已选点；没有内置 Key 时不再提示“已恢复默认服务” |
+
+测试：`RootEngineTest`、`RootXposedBridgeTest`、`RecipientTableTest`、`SettingsRepositoryTest` 及现有回归。完整验证日志在工作区 `_tools/audit-latest-check.log`，最后增量日志 `_tools/audit-latest-final-check.log`。新候选必须另行安装和真机复测，不能继承 0.3.10 的运行结论。
+
+后续真机顺序：完整安装 0.4.2 主应用、0.3.11 模块及新版测试包；用户手动重启并恢复热点/USB后，运行：
+
+```powershell
+rebuild/scripts/verify-compatibility.ps1 -RequiredModule 0.3.11 -Extended -RequireSensors
+```
+
+继续保留系统框架和自有 `com.mockgeo.probe` 作用域。重点复查 GPS 首帧、停止/恢复订阅、单次配额、取消/注销；单独检查高德首次授权、个人 Key 保存/清除/更换、选点保持，以及旧 Root 配置能明确报错并切回可用模式。不得自动重启或恢复热点，不读取用户私有目标。
+
+
+本轮后续设备已连接，最终安装主应用 0.4.2 与模块 0.3.11，并核对设备 APK 哈希。160 项 JVM/debug 测试、构建及 Lint 通过。0.4.2 的 12 项定位真机检查在 **加载中的 0.3.10** 上通过；高德保持前台后 19 项通过，首次后台超时记录保留。详见工作区 `WORKLOG.md` §21.1 和 `_tools/audit-042-*-device.log`。当前模拟关闭；**0.3.11 模块仍待手动重启后的独立验收**。完整配置/更换 Key 的 UI 流程未在本轮真机完整走完。
+
+
+### 8.7 0.4.3 的纯 Root 系统定位验收
+
+Root载荷0.1.0在实际system_server（PID3465、UID1000）加载24个钩子并取得独立回执；LSPosed无驻留。8项基础检查、独立探针GPS/network/fused与WebView、PendingIntent首帧/单次/持续、取消/注销及flush通过。GNSS/NMEA与动态豁免、停止、恢复同一订阅也通过。结束时原豁免策略已恢复、模拟关闭，系统PID不变，SELinux Enforcing。
+
+完整证据在工作区 `_tools/root-010-device/` 和 `WORKLOG.md` §24。这里没有将应用进程传感器模拟计入Root通过项，也没有验证用户私有业务入口或其他ROM。已安装主应用仍为0.4.3，不需要再次安装APK。

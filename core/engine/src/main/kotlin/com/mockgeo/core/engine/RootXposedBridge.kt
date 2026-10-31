@@ -24,6 +24,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  */
 class RootXposedBridge(
     private val nativeInstallEnabled: Boolean = true,
+    private val installNative: (Executable, Method, Method, Method) -> Boolean = NativeArtBridge::hookMethod,
 ) : XposedInterface {
 
     data class HookRecord(
@@ -34,7 +35,8 @@ class RootXposedBridge(
         val hookers: CopyOnWriteArrayList<XposedInterface.Hooker> = CopyOnWriteArrayList(),
     )
 
-    private val recordsByExecutable = ConcurrentHashMap<Executable, HookRecord>()
+    private val recordsByExecutable = if (nativeInstallEnabled) nativeRecordsByExecutable
+        else ConcurrentHashMap<Executable, HookRecord>()
 
     fun hookedMethodsCount(): Int = recordsByExecutable.size
 
@@ -53,9 +55,7 @@ class RootXposedBridge(
     }
 
     override fun hookClassInitializer(origin: Class<*>): XposedInterface.HookBuilder {
-        val clinit = origin.declaredConstructors.firstOrNull()
-            ?: throw IllegalArgumentException("No initializer found for ${origin.name}")
-        return Builder(clinit)
+        throw UnsupportedOperationException("ART class initializer hooks are not implemented: ${origin.name}")
     }
 
     override fun deoptimize(method: Executable): Boolean {
@@ -128,7 +128,7 @@ class RootXposedBridge(
             return this
         }
 
-        override fun intercept(hooker: XposedInterface.Hooker): XposedInterface.HookHandle {
+        override fun intercept(hooker: XposedInterface.Hooker): XposedInterface.HookHandle = synchronized(recordsByExecutable) {
             val isStatic = Modifier.isStatic(origin.modifiers)
             val existing = recordsByExecutable[origin]
             if (existing != null) {
@@ -136,36 +136,35 @@ class RootXposedBridge(
                 return Handle(origin, id ?: existing.slotKey ?: origin.name, existing, hooker)
             }
 
-            var slotKey: String? = null
-            var bakMethod: Method? = null
-            if (nativeInstallEnabled && origin is Method) {
-                val slot = ArtBridgePool.acquireSlot(origin)
-                if (slot != null) {
-                    val hooked = NativeArtBridge.hookMethod(
-                        target = origin,
-                        hook = slot.hookMethod,
-                        backup = slot.bakMethod,
-                        copy = slot.copyMethod,
-                    )
-                    if (hooked) {
-                        slotKey = slot.key
-                        bakMethod = slot.bakMethod
-                    }
-                }
-            }
+            val slot = if (nativeInstallEnabled) {
+                require(origin is Method) { "Only methods are supported by the ART bridge" }
+                ArtBridgePool.acquireSlot(origin)
+                    ?: throw UnsupportedOperationException("No ART bridge slot for $origin")
+            } else null
 
             val record = HookRecord(
                 executable = origin,
-                slotKey = slotKey,
-                bakMethod = bakMethod,
+                slotKey = slot?.key,
+                bakMethod = slot?.bakMethod,
                 isStatic = isStatic,
             )
             record.hookers.add(hooker)
-            recordsByExecutable[origin] = record
-            if (slotKey != null) {
-                slotsToRecords[slotKey] = record
+            if (slot != null) {
+                // A different thread can call the patched entry point immediately.
+                // Publish dispatch state before enabling the trampoline.
+                slotsToRecords[slot.key] = record
+                try {
+                    check(installNative(origin, slot.hookMethod, slot.bakMethod, slot.copyMethod)) {
+                        "Native ART hook installation failed: $origin"
+                    }
+                } catch (failure: Throwable) {
+                    slotsToRecords.remove(slot.key, record)
+                    ArtBridgePool.releaseSlot(origin as Method, slot)
+                    throw failure
+                }
             }
-            return Handle(origin, id ?: slotKey ?: origin.name, record, hooker)
+            recordsByExecutable[origin] = record
+            Handle(origin, id ?: slot?.key ?: origin.name, record, hooker)
         }
     }
 
@@ -240,11 +239,12 @@ class RootXposedBridge(
 
     companion object {
         private const val TAG = "RootXposedBridge"
+        private val nativeRecordsByExecutable = ConcurrentHashMap<Executable, HookRecord>()
         private val slotsToRecords = ConcurrentHashMap<String, HookRecord>()
 
         @JvmStatic
         fun dispatchFromBridge(slotKey: String, rawArgs: Array<out Any?>): Any? {
-            val record = slotsToRecords[slotKey] ?: return null
+            val record = checkNotNull(slotsToRecords[slotKey]) { "Unregistered ART bridge slot: $slotKey" }
             val receiver: Any?
             val callArgs: Array<Any?>
             if (record.isStatic) {

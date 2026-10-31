@@ -94,10 +94,6 @@ class EngineRouter(
                 failure = IllegalStateException("LSPosed module unreachable; stop not confirmed")
                 continue
             }
-            if (engine === current && engine is RootEngine && !engine.pingModule()) {
-                failure = IllegalStateException("Root system hooks unreachable; stop not confirmed")
-                continue
-            }
             val result = engine.stop()
             if (result.isFailure && failure == null) failure = result.exceptionOrNull()
         }
@@ -113,7 +109,6 @@ class EngineRouter(
     fun moduleSnapshot(): XposedEngine.ModuleStatus? =
         (byId[currentId] as? RootEngine)?.statusSnapshot()
             ?: (byId["xposed"] as? XposedEngine)?.statusSnapshot()
-            ?: (byId["root"] as? RootEngine)?.statusSnapshot()
 
     override fun state(): StateFlow<EngineState> = _state
 

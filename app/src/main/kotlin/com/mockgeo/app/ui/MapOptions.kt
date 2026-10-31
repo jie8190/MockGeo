@@ -53,8 +53,8 @@ internal fun MapPreferences(vm: HomeViewModel) {
     val context = LocalContext.current
     val settings by vm.settings.collectAsState()
     val customKey by AmapKeyStore.customKeyFlow(context).collectAsState()
-    var consentOpen by remember { mutableStateOf(false) }
     var keyDialogOpen by remember { mutableStateOf(false) }
+    var enableAfterKeySave by remember { mutableStateOf(false) }
     val hasAmap = !customKey.isNullOrBlank() || BuildConfig.AMAP_API_KEY.isNotBlank()
     val usingAmap = hasAmap && settings.mapProvider == "amap" && settings.amapConsent
     val keySourceLabel = when {
@@ -65,11 +65,9 @@ internal fun MapPreferences(vm: HomeViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         MapChoice("高德地图", "国内地图、地点搜索与道路规划（$keySourceLabel）", usingAmap, true) {
             if (!hasAmap) {
+                enableAfterKeySave = true
                 keyDialogOpen = true
-            } else {
-                vm.setAmapConsent(true)
-                vm.setMapProvider("amap")
-            }
+            } else vm.setMapProvider("amap") // HomeScreen owns the single consent dialog.
         }
         MapChoice("OpenStreetMap", "全球开放地图，免配置即用", !usingAmap, true) { vm.setMapProvider("osm") }
         if (usingAmap) {
@@ -81,21 +79,18 @@ internal fun MapPreferences(vm: HomeViewModel) {
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { keyDialogOpen = true }, contentPadding = PaddingValues(0.dp)) {
+            TextButton(onClick = { enableAfterKeySave = false; keyDialogOpen = true }, contentPadding = PaddingValues(0.dp)) {
                 Icon(Icons.Default.Key, null, Modifier.size(16.dp))
                 Spacer(Modifier.width(5.dp))
                 Text(if (customKey.isNullOrBlank()) "自定义高德密钥 (可选)" else "管理个人高德密钥")
             }
             if (settings.amapConsent) {
                 TextButton(onClick = { vm.setMapProvider("osm"); vm.setAmapConsent(false) }, contentPadding = PaddingValues(0.dp)) {
-                    Text("切换至 OSM")
+                    Text("撤回授权")
                 }
             }
         }
     }
-    if (consentOpen) AmapConsentDialog(onDecline = { consentOpen = false }, onAccept = {
-        consentOpen = false; vm.setAmapConsent(true); vm.setMapProvider("amap")
-    })
     if (keyDialogOpen) AmapKeyConfigDialog(
         currentCustomKey = customKey.orEmpty(),
         hasBuiltInKey = BuildConfig.AMAP_API_KEY.isNotBlank(),
@@ -103,7 +98,16 @@ internal fun MapPreferences(vm: HomeViewModel) {
         onSave = { newKey ->
             AmapKeyStore.setCustomApiKey(context, newKey)
             keyDialogOpen = false
-            vm.postMessage(if (newKey.isBlank()) "已恢复默认高德 Key" else "自定义高德 Key 已保存")
+            val keyAvailable = newKey.isNotBlank() || BuildConfig.AMAP_API_KEY.isNotBlank()
+            if (enableAfterKeySave && keyAvailable) {
+                vm.setMapProvider("amap")
+            }
+            enableAfterKeySave = false
+            vm.postMessage(when {
+                newKey.isNotBlank() -> "自定义高德 Key 已保存"
+                keyAvailable -> "已恢复内置高德 Key"
+                else -> "个人 Key 已清除，当前使用 OpenStreetMap"
+            })
         },
     )
 }
@@ -130,7 +134,8 @@ internal fun AmapKeyConfigDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "应用默认已内置地图服务。若多人共用导致搜索次数受限，可填入个人高德 Key 独享搜索与路线规划配额。",
+                    if (hasBuiltInKey) "可填入个人高德 Key，使用自己的搜索与路线规划配额。"
+                    else "此安装包未内置高德 Key。填写个人 Android SDK Key 后可启用高德地图、搜索与路线规划。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

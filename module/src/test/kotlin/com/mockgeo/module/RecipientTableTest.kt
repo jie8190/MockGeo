@@ -4,6 +4,27 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.jupiter.api.Test
 
 class RecipientTableTest {
+    @Test fun `rollback does not remove a later publication of the same subscription`() {
+        val table = RecipientTable<String>()
+        val shared = RecipientTable.Subscription(10321, "gps", 2)
+        val failed = table.publish("binder", shared)
+        table.publish("binder", shared)
+        table.rollback(failed)
+        assertThat(table.find("binder", "gps")).isSameInstanceAs(shared)
+    }
+
+    @Test fun `old rollback cannot revive state after unregister and register`() {
+        val table = RecipientTable<String>()
+        val old = RecipientTable.Subscription(10321, "gps", 1)
+        table.publish("binder", old)
+        val shared = RecipientTable.Subscription(10321, "gps", 2)
+        val failed = table.publish("binder", shared)
+        table.remove("binder")
+        table.publish("binder", shared)
+        table.rollback(failed)
+        assertThat(table.find("binder", "gps")).isSameInstanceAs(shared)
+    }
+
     @Test fun `reconstructed interface shares single update quota with original wrapper`() {
         val table = RecipientTable<String>()
         val original = RecipientTable.Subscription(10321, "gps", 1)

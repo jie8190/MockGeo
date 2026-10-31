@@ -25,7 +25,8 @@ object ArtBridgePool {
         val copyMethod: Method,
     )
 
-    private val allocatedByKey = ConcurrentHashMap<String, SlotMethods>()
+    // Method identity includes the declaring ClassLoader and return type.
+    private val allocatedByKey = ConcurrentHashMap<Method, SlotMethods>()
     private val usedSlotKeys = ConcurrentHashMap.newKeySet<String>()
 
     fun typeShorty(type: Class<*>): Char = when (type) {
@@ -57,8 +58,7 @@ object ArtBridgePool {
     @Synchronized
     fun acquireSlot(target: Executable): SlotMethods? {
         if (target !is Method) return null
-        val targetId = "${target.declaringClass.name}#${target.name}(${target.parameterTypes.joinToString(",") { it.name }})"
-        allocatedByKey[targetId]?.let { return it }
+        allocatedByKey[target]?.let { return it }
 
         val shorty = methodShorty(target)
         val cls = ArtBridgePool::class.java
@@ -73,10 +73,15 @@ object ArtBridgePool {
             val copyM = cls.declaredMethods.firstOrNull { it.name == copyName } ?: break
             usedSlotKeys += slotKey
             val slot = SlotMethods(slotKey, hookM, bakM, copyM)
-            allocatedByKey[targetId] = slot
+            allocatedByKey[target] = slot
             return slot
         }
         return null
+    }
+
+    @Synchronized
+    internal fun releaseSlot(target: Method, slot: SlotMethods) {
+        if (allocatedByKey.remove(target, slot)) usedSlotKeys.remove(slot.key)
     }
 
     @JvmStatic

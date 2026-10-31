@@ -172,13 +172,13 @@ fun SettingsDialog(vm: HomeViewModel, onDismiss: () -> Unit) {
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
                     EngineOption("LSPosed 模式", "系统级深度接管，全面兼容各类应用与小程序", settings.engineId == "xposed", idle) { vm.setEngine("xposed") }
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
-                    EngineOption("Root 直连模式", "仅需 Root 权限（KernelSU / Magisk），免装框架直接模拟", settings.engineId == "root", idle) { vm.setEngine("root") }
+                    EngineOption("Root 直连模式", "通过超级用户授权加载系统定位功能，无需另装模块", settings.engineId == "root", idle) { vm.setEngine("root") }
                 }
             }
             Text(if (idle) {
                 when (settings.engineId) {
                     "provider" -> "在系统「开发者选项 → 选择模拟位置信息应用」中选中 MockGeo 即可使用。"
-                    "root" -> "授予超级用户权限后直接生效，自动同步系统定位服务。"
+                    "root" -> "首次开始时加载 Root 组件。若系统仍驻留 LSPosed，请先停用框架注入并手动重启；应用内传感器兼容项暂不支持。"
                     else -> "启用 MockGeo 模块后生效，全局接管定位请求。"
                 }
             } else "正在模拟位置中，停止模拟后可切换运行模式。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

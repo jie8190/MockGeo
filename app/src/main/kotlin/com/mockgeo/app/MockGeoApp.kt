@@ -27,7 +27,7 @@ class MockGeoApp : Application() {
         super.onCreate()
         // osmdroid 全局配置：只初始化一次（docs/08 §15.7）
         OsmConfig.getInstance().apply {
-            userAgentValue = "MockGeo/0.4.1 ($packageName; Android personal location testing app)"
+            userAgentValue = "MockGeo/${BuildConfig.VERSION_NAME} ($packageName; Android personal location testing app)"
             tileDownloadThreads = 2
             tileDownloadMaxQueueSize = 40
             cacheMapTileCount = 48

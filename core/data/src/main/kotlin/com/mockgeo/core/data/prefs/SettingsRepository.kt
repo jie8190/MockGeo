@@ -45,7 +45,9 @@ data class AppSettings(
     }
 }
 
-class SettingsRepository(private val context: Context) {
+class SettingsRepository internal constructor(private val store: DataStore<Preferences>) {
+
+    constructor(context: Context) : this(context.dataStore)
 
     private object Keys {
         val ENGINE = stringPreferencesKey("engine")
@@ -69,7 +71,7 @@ class SettingsRepository(private val context: Context) {
         val COMPATIBILITY = booleanPreferencesKey("compatibility_format")
     }
 
-    val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
+    val settings: Flow<AppSettings> = store.data.map { p ->
         AppSettings(
             engineId = p[Keys.ENGINE] ?: "provider",
             simIntervalMs = p[Keys.INTERVAL] ?: 1000L,
@@ -87,7 +89,7 @@ class SettingsRepository(private val context: Context) {
             satellites = p[Keys.SATELLITES] ?: 12,
             sineSpeedCurve = p[Keys.SINE_CURVE] ?: true,
             mapProvider = p[Keys.MAP_PROVIDER] ?: "amap",
-            amapConsent = p[Keys.AMAP_CONSENT] ?: true,
+            amapConsent = p[Keys.AMAP_CONSENT] ?: false,
             mapSatellite = p[Keys.MAP_SATELLITE] ?: false,
             compatibilityMode = p[Keys.COMPATIBILITY] ?: false,
         )
@@ -95,22 +97,22 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setEngine(id: String) {
         require(id in AppSettings.ENGINE_IDS) { "unknown engine: $id" }
-        context.dataStore.edit { it[Keys.ENGINE] = id }
+        store.edit { it[Keys.ENGINE] = id }
     }
 
     suspend fun setInterval(ms: Long) {
         require(ms in 200..2000) { "interval out of range: $ms" }
-        context.dataStore.edit { it[Keys.INTERVAL] = ms }
+        store.edit { it[Keys.INTERVAL] = ms }
     }
 
     suspend fun setAccuracy(m: Double) {
         require(m in 1.0..50.0) { "accuracy out of range: $m" }
-        context.dataStore.edit { it[Keys.ACCURACY] = m }
+        store.edit { it[Keys.ACCURACY] = m }
     }
 
     suspend fun setJitter(enabled: Boolean, meters: Double) {
         require(meters in 0.0..SimConfigMaxJitter) { "jitter out of range: $meters" }
-        context.dataStore.edit {
+        store.edit {
             it[Keys.JITTER_ON] = enabled
             it[Keys.JITTER_M] = meters
         }
@@ -118,53 +120,53 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setRouteSpeed(mps: Double) {
         require(mps in 0.1..30.0) { "speed out of range: $mps" }
-        context.dataStore.edit { it[Keys.ROUTE_SPEED] = mps }
+        store.edit { it[Keys.ROUTE_SPEED] = mps }
     }
 
     suspend fun setHistoryLimit(limit: Int) {
         require(limit in 10..1000) { "history limit out of range: $limit" }
-        context.dataStore.edit { it[Keys.HISTORY_LIMIT] = limit }
+        store.edit { it[Keys.HISTORY_LIMIT] = limit }
     }
 
-    suspend fun setScreenKeepOn(on: Boolean) = context.dataStore.edit { it[Keys.KEEP_ON] = on }
+    suspend fun setScreenKeepOn(on: Boolean) = store.edit { it[Keys.KEEP_ON] = on }
 
     suspend fun setTheme(theme: String) {
         require(theme in listOf("system", "light", "dark")) { "未知主题" }
-        context.dataStore.edit { it[Keys.THEME] = theme }
+        store.edit { it[Keys.THEME] = theme }
     }
 
     suspend fun setNetworkProviderToo(too: Boolean) =
-        context.dataStore.edit { it[Keys.NETWORK_TOO] = too }
+        store.edit { it[Keys.NETWORK_TOO] = too }
 
     suspend fun setAltitude(m: Double) {
         require(m in -500.0..9000.0) { "altitude out of range: $m" }
-        context.dataStore.edit { it[Keys.ALTITUDE] = m }
+        store.edit { it[Keys.ALTITUDE] = m }
     }
 
     suspend fun setSatellites(n: Int) {
         require(n in 0..64) { "satellites out of range: $n" }
-        context.dataStore.edit { it[Keys.SATELLITES] = n }
+        store.edit { it[Keys.SATELLITES] = n }
     }
 
-    suspend fun setSineCurve(on: Boolean) = context.dataStore.edit { it[Keys.SINE_CURVE] = on }
+    suspend fun setSineCurve(on: Boolean) = store.edit { it[Keys.SINE_CURVE] = on }
 
     suspend fun setMapProvider(id: String) {
         require(id in listOf("osm", "amap")) { "未知地图服务" }
-        context.dataStore.edit { it[Keys.MAP_PROVIDER] = id }
+        store.edit { it[Keys.MAP_PROVIDER] = id }
     }
-    suspend fun setAmapConsent(agreed: Boolean) = context.dataStore.edit {
+    suspend fun setAmapConsent(agreed: Boolean) = store.edit {
         it[Keys.AMAP_CONSENT] = agreed
         it[Keys.MAP_PROVIDER] = if (agreed) "amap" else "osm"
     }
-    suspend fun setMapSatellite(on: Boolean) = context.dataStore.edit { it[Keys.MAP_SATELLITE] = on }
-    suspend fun setCompatibilityMode(on: Boolean) = context.dataStore.edit { it[Keys.COMPATIBILITY] = on }
+    suspend fun setMapSatellite(on: Boolean) = store.edit { it[Keys.MAP_SATELLITE] = on }
+    suspend fun setCompatibilityMode(on: Boolean) = store.edit { it[Keys.COMPATIBILITY] = on }
 
     fun exportJson(settings: AppSettings): String = SettingsJson.encode(settings)
 
     /** Validate the entire document before one atomic edit. Engine selection is never imported. */
     suspend fun importJson(json: String) {
         val value = SettingsJson.decode(json)
-        context.dataStore.edit {
+        store.edit {
             it[Keys.INTERVAL] = value.simIntervalMs
             it[Keys.ACCURACY] = value.gpsAccuracyM
             it[Keys.JITTER_ON] = value.jitterEnabled

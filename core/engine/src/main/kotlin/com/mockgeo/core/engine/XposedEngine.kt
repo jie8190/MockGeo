@@ -35,7 +35,9 @@ class XposedEngine(
     private val clock: Clock,
     private val scope: CoroutineScope,
     private val log: SimLogger,
-) : InjectionEngine {
+    private val controlProvider: String = ControlPlane.PROVIDER,
+    private val expectedBackend: String = "xposed",
+) : SystemHookControl {
 
     private val lm = context.getSystemService(LocationManager::class.java)
     private val statusUri: Uri = Uri.parse(ControlPlane.STATUS_URI)
@@ -152,21 +154,23 @@ class XposedEngine(
      * 判定：sendExtraCommand 不抛（未知 provider 会抛 IllegalArgumentException），
      * 且状态 provider 数据新鲜（模块活着且写过状态）。
      */
-    suspend fun pingModule(): Boolean {
+    override suspend fun pingModule(): Boolean {
         val requestedAt = clock.currentTimeMillis()
+        val nonce = java.util.UUID.randomUUID().toString().replace("-", "")
         val cmdOk = runCatching {
-            val extras = Bundle()
-            checkNotNull(lm).sendExtraCommand(ControlPlane.PROVIDER, ControlPlane.CMD_PING, extras)
+            val extras = Bundle().apply { putString(ControlPlane.KEY_REQUEST_NONCE, nonce) }
+            checkNotNull(lm).sendExtraCommand(controlProvider, ControlPlane.CMD_PING, extras)
             // inout 时还能拿到 pong；仅作加分项，不作必要条件
             extras.containsKey(ControlPlane.KEY_PONG)
         }.isSuccess
         if (!cmdOk) return false
         // 命令没抛异常 ≠ 模块在：用状态新鲜度二次确认
         val st = readStatus()
-        return st != null && st.updatedAt >= requestedAt && st.isFresh(clock.currentTimeMillis())
+        return st != null && st.updatedAt >= requestedAt && st.isFresh(clock.currentTimeMillis()) &&
+            (expectedBackend != "root" || st.responseNonce == nonce)
     }
 
-    fun statusSnapshot(): ModuleStatus? = readStatus()
+    override fun statusSnapshot(): ModuleStatus? = readStatus()
 
     /** 读模块状态（App 自己的 provider，本地读）。 */
     internal fun readStatus(): ModuleStatus? = runCatching {
@@ -193,9 +197,13 @@ class XposedEngine(
                 listenerCalls = idx(ControlPlane.COL_LISTENER_CALLS).let { if (it >= 0) c.getLong(it) else 0 },
                 pushes = idx(ControlPlane.COL_PUSHES).let { if (it >= 0) c.getLong(it) else 0 },
                 reportMock = idx(ControlPlane.COL_REPORT_MOCK).let { it < 0 || c.getInt(it) != 0 },
+                backend = idx(ControlPlane.COL_BACKEND).let { if (it < 0) "" else c.getString(it).orEmpty() },
+                processId = idx(ControlPlane.COL_PROCESS_ID).let { if (it < 0) 0 else c.getInt(it) },
+                instanceNonce = idx(ControlPlane.COL_INSTANCE_NONCE).let { if (it < 0) "" else c.getString(it).orEmpty() },
+                responseNonce = idx(ControlPlane.COL_RESPONSE_NONCE).let { if (it < 0) "" else c.getString(it).orEmpty() },
             )
         }
-    }.getOrNull()
+    }.getOrNull()?.takeIf { it.backend == expectedBackend || (expectedBackend == "xposed" && it.backend.isBlank()) }
 
     /**
      * 发布配置 + 开关。带重试与回执校验。
@@ -234,7 +242,7 @@ class XposedEngine(
                         putBoolean(ControlPlane.KEY_REPORT_MOCK, cfg.reportMock)
                     }
                 }
-                l.sendExtraCommand(ControlPlane.PROVIDER, ControlPlane.CMD_SET, extras)
+                l.sendExtraCommand(controlProvider, ControlPlane.CMD_SET, extras)
                 // 辅助回执：inout 时模块已写入 ack_*；缺失不视为失败（主判据在状态 provider）
                 if (extras.containsKey(ControlPlane.KEY_ACK_SUCCESS) &&
                     !extras.getBoolean(ControlPlane.KEY_ACK_SUCCESS)
@@ -323,6 +331,10 @@ class XposedEngine(
         val listenerCalls: Long = 0,
         val pushes: Long = 0,
         val reportMock: Boolean = true,
+        val backend: String = "",
+        val processId: Int = 0,
+        val instanceNonce: String = "",
+        val responseNonce: String = "",
     ) {
         fun isFresh(nowMs: Long): Boolean =
             updatedAt > 0 && nowMs - updatedAt in 0..ControlPlane.STATUS_FRESH_MS

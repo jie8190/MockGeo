@@ -21,6 +21,12 @@ package com.mockgeo.core.model
  *  4. App 侧看门狗周期性对账，发现分叉立即重发期望状态。
  */
 object ControlPlane {
+    const val ROOT_PROVIDER = "mockgeo_root"
+    const val KEY_REQUEST_NONCE = "request_nonce"
+    const val COL_BACKEND = "backend"
+    const val COL_PROCESS_ID = "process_id"
+    const val COL_INSTANCE_NONCE = "instance_nonce"
+    const val COL_RESPONSE_NONCE = "response_nonce"
 
     /** 自定义 provider 名。模块 hook sendExtraCommand 后接管此 provider 的命令。 */
     const val PROVIDER = "mockgeo"

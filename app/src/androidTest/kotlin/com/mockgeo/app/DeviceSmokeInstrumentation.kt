@@ -19,8 +19,6 @@ import com.mockgeo.app.sim.SimulationService
 import com.mockgeo.core.data.prefs.AppSettings
 import com.mockgeo.core.data.prefs.SettingsRepository
 import com.mockgeo.core.engine.EngineRouter
-import com.mockgeo.core.engine.NativeArtBridge
-import com.mockgeo.core.engine.RootSystemBootstrap
 import com.mockgeo.core.engine.RootXposedBridge
 import com.mockgeo.core.engine.SimulationSession
 import com.mockgeo.core.model.ControlPlane
@@ -262,101 +260,79 @@ class DeviceSmokeInstrumentation : Instrumentation() {
         finish(if (success) Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
     }
 
+    /** This path requires an independent Root receipt and never selects the xposed backend. */
     private fun runRootEngineChecks() {
         var success = false
+        var engaged = false
         runBlocking {
+            var controller: SimController? = null
             var router: EngineRouter? = null
-            var originalEngine: String? = null
+            var saved: AppSettings? = null
+            var oldEngine: String? = null
             try {
-                step = "root-app-ready"
-                val application = targetContext.applicationContext as? MockGeoApp
-                    ?: error("Target application is not MockGeoApp")
-                withTimeout(20_000) { application.ready.await() }
+                step = "root-application-ready"
+                val app = targetContext.applicationContext as MockGeoApp
+                withTimeout(20_000) { app.ready.await() }
                 val koin = GlobalContext.get()
-                val activeRouter = koin.get<EngineRouter>()
-                router = activeRouter
-                originalEngine = activeRouter.currentEngineId
-                check("root" in activeRouter.availableEngineIds) {
-                    "root engine missing from availableEngineIds=${activeRouter.availableEngineIds}"
-                }
-                val cap = activeRouter.capabilityOf("root") ?: error("Missing capability for root engine")
-                check(!cap.requiresMockAppOp && !cap.requiresExternalModule && cap.supportsNetworkProvider) {
-                    "Unexpected root capability: $cap"
-                }
-                pass("root-router-capability", "available=${activeRouter.availableEngineIds} cap=${cap.displayName}")
-
-                step = "root-native-art"
-                val inited = NativeArtBridge.ensureInitialized()
-                val unlocked = NativeArtBridge.unlockHiddenApis()
-                val diag = NativeArtBridge.diagnostics()
-                check(inited) { "NativeArtBridge.ensureInitialized returned false ($diag)" }
-                check(unlocked) { "unlockHiddenApis returned false ($diag)" }
-                check(diag.contains("initialized=true")) { "Unexpected ART diagnostics: $diag" }
-                pass("root-native-art", diag)
-
-                step = "root-xposed-bridge-live-hook"
-                val liveHookOk = RootSystemBootstrap.runLiveHookSelfTest()
-                check(liveHookOk) { "RootSystemBootstrap.runLiveHookSelfTest() returned false" }
-                pass("root-xposed-bridge-live-hook", "live ART trampoline hook + proceed verified")
-
-                step = "root-engine-selfcheck"
+                val activeRouter = koin.get<EngineRouter>().also { router = it }
+                val active = koin.get<SimController>().also { controller = it }
+                saved = koin.get<SettingsRepository>().settings.first()
+                oldEngine = activeRouter.currentEngineId
                 val checks = activeRouter.selfCheck("root")
-                val allOk = checks.all { it.ok }
-                check(allOk) { "RootEngine selfCheck had failures: $checks" }
-                pass("root-engine-selfcheck", checks.joinToString("; ") { "${it.name}=${it.ok}" })
-
-                step = "root-engine-e2e-simulation"
-                val activeController = koin.get<SimController>()
-                val savedSettings = koin.get<SettingsRepository>().settings.first()
-                expectedMock = false
-                withTimeout(10_000) { activeController.stop() }
-                awaitState(activeController, "Idle before root start") { it == EngineState.Idle }
+                check(checks.all { it.ok }) { checks.filterNot { it.ok }.joinToString { it.message ?: it.name } }
+                pass("root-environment", "independent Root prerequisites available")
+                engaged = true
+                withTimeout(10_000) { active.stop() }
+                awaitState(active, "Idle before Root") { it == EngineState.Idle }
                 switchWhenIdle(activeRouter, "root")
-                activeController.updateSettings(savedSettings.copy(
-                    engineId = "root",
-                    simIntervalMs = 200L,
-                    jitterEnabled = false,
-                    jitterMeters = 0.0,
-                    compatibilityMode = true,
-                ))
-                val beforeRev = receipt().revision
-                val startOut = withTimeout(10_000) { activeController.startFixed(beijing) }
-                check(startOut == SimulationSession.RequestOutcome.ACCEPTED) { "Root fixed start outcome=$startOut" }
-                awaitState(activeController, "Running under root engine") { it is EngineState.Running }
-                val rootReceipt = awaitReceipt(enabled = true, minRevision = beforeRev + 1)
-                val locationManager = targetContext.getSystemService(LocationManager::class.java)
-                    ?: error("LocationManager unavailable")
-                assertLocation(gps(locationManager), beijing, 1.0, "root engine fixed GPS")
-                val beforeStopRev = receipt().revision
-                withTimeout(10_000) { activeController.stop() }
-                awaitState(activeController, "Idle after root stop") { it == EngineState.Idle }
-                val stopReceipt = awaitReceipt(enabled = false, minRevision = beforeStopRev + 1)
-                activeController.updateSettings(savedSettings)
-                switchWhenIdle(activeRouter, originalEngine)
-                check(activeRouter.currentEngineId == originalEngine) { "Failed to restore $originalEngine" }
-                pass("root-engine-e2e-simulation", "started rev=${rootReceipt.revision}, GPS verified, stopped rev=${stopReceipt.revision}, restored $originalEngine")
-
+                active.updateSettings(saved!!.copy(engineId = "root", compatibilityMode = true,
+                    simIntervalMs = 200, jitterEnabled = false, jitterMeters = 0.0))
+                expectedMock = false
+                step = "root-first-start"
+                check(active.startFixed(beijing) == SimulationSession.RequestOutcome.ACCEPTED)
+                awaitState(active, "Root Running", timeoutMs = 90_000) { it is EngineState.Running }
+                val status = checkNotNull(activeRouter.moduleSnapshot())
+                check(status.backend == "root" && status.processId > 1 && status.hooksInstalled &&
+                    status.instanceNonce.matches(Regex("[0-9a-f]{32}"))) { "Missing independent system process identity" }
+                pass("root-independent-receipt", "backend=root pid=${status.processId} version=${status.moduleVersion}")
+                val lm = targetContext.getSystemService(LocationManager::class.java)!!
+                assertLocation(gps(lm), beijing, 1.0, "root last GPS")
+                pass("root-gps-last", "matching synthetic location")
+                assertLocation(awaitGpsListener(lm), beijing, 1.0, "root GPS listener")
+                pass("root-gps-listener", "matching synthetic callback")
+                for (provider in listOf("gps", "network", "fused")) {
+                    step = "root-current-$provider"
+                    val fix = awaitCurrentFix(lm, provider)
+                    assertLocation(fix, beijing, 1.0, step)
+                    check(fix.provider == provider)
+                    pass(step, "matching provider and location")
+                }
+                step = "root-stop"
+                active.stop()
+                awaitState(active, "Root Idle") { it == EngineState.Idle }
+                check(activeRouter.moduleSnapshot()?.enabled == false)
+                pass("root-stop", "system receipt confirms disabled")
                 success = true
-            } catch (error: Throwable) {
-                success = false
+            } catch (failure: Throwable) {
                 results.putString("failureStep", step)
-                results.putString("failure", error.toString())
-                emit("FAIL", "$step: ${error.javaClass.simpleName}: ${error.message}")
+                results.putString("failure", failure.toString())
+                emit("FAIL", "$step: $failure")
             } finally {
-                val restoreRouter = router
-                val restoreEngine = originalEngine
-                if (restoreRouter != null && restoreEngine != null && restoreRouter.currentEngineId != restoreEngine) {
-                    runCatching { switchWhenIdle(restoreRouter, restoreEngine) }
+                try {
+                    if (engaged) {
+                        controller?.stop()
+                        saved?.let { controller?.updateSettings(it) }
+                        if (router != null && oldEngine != null) switchWhenIdle(router!!, oldEngine!!)
+                    }
+                } catch (cleanup: Throwable) {
+                    success = false
+                    results.putString("cleanupFailure", cleanup.toString())
                 }
             }
         }
         results.putInt("passedSteps", passed)
         results.putString("mode", mode)
-        results.putString(
-            "stream",
-            if (success) "PASS: $passed root-engine checks ($mode)\n"
-            else "FAIL: root-engine checks ($mode), see failureStep/failure\n",
-        )
+        results.putString("stream", if (success) "PASS: $passed independent Root checks\n" else "FAIL: independent Root checks\n")
         finish(if (success) Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
     }
 
@@ -371,8 +347,9 @@ class DeviceSmokeInstrumentation : Instrumentation() {
     }
 
     private suspend fun awaitState(controller: SimController, description: String,
+                                   timeoutMs: Long = 6_000,
                                    accepts: (EngineState) -> Boolean) {
-        withTimeout(6_000) {
+        withTimeout(timeoutMs) {
             while (!accepts(controller.ui.value.engineState)) {
                 val current = controller.ui.value.engineState
                 check(current !is EngineState.Failed) { "$description; state=$current" }

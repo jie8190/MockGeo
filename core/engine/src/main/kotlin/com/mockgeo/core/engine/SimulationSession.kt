@@ -65,7 +65,8 @@ class SimulationSession(
             _state.value = EngineState.Starting(req)
             log.log(req, SimLogger.INFO, TAG, "start requested")
             try {
-                val result = bounded(startTtlMs) { engine.start(cfg) }
+                val timeout = engine.capability().startupTimeoutMs?.coerceIn(1, 90_000) ?: startTtlMs
+                val result = bounded(timeout) { engine.start(cfg) }
                 if (result?.isSuccess == true) {
                     _state.value = EngineState.Running(clock.elapsedRealtime(), cfg)
                 } else {

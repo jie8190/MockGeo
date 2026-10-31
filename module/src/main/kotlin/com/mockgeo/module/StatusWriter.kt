@@ -35,7 +35,11 @@ object StatusWriter {
                 put(ControlPlane.COL_HOOKS, ModuleConfig.hooksInstalled > 0)
                 put(ControlPlane.COL_UPTIME_MS, uptimeMs())
                 put(ControlPlane.COL_UPDATED_AT, System.currentTimeMillis())
-                put(ControlPlane.COL_MODULE_VERSION, MODULE_VERSION)
+                put(ControlPlane.COL_MODULE_VERSION, ModuleRuntime.version)
+                put(ControlPlane.COL_BACKEND, ModuleRuntime.backend)
+                put(ControlPlane.COL_PROCESS_ID, android.os.Process.myPid())
+                put(ControlPlane.COL_INSTANCE_NONCE, ModuleRuntime.instanceNonce)
+                put(ControlPlane.COL_RESPONSE_NONCE, ModuleRuntime.responseNonce)
                 put(ControlPlane.COL_LAST_CALLS, HookDiagnostics.lastCalls.get())
                 put(ControlPlane.COL_CURRENT_CALLS, HookDiagnostics.currentCalls.get())
                 put(ControlPlane.COL_LISTENER_CALLS, HookDiagnostics.listenerCalls.get())
@@ -127,5 +131,5 @@ object StatusWriter {
         }
     }
 
-    const val MODULE_VERSION = "0.3.10"
+    const val MODULE_VERSION = "0.3.12"
 }

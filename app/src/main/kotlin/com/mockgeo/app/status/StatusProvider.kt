@@ -30,6 +30,10 @@ class StatusProvider : ContentProvider() {
         ControlPlane.COL_UPTIME_MS,
         ControlPlane.COL_UPDATED_AT,
         ControlPlane.COL_MODULE_VERSION,
+        ControlPlane.COL_BACKEND,
+        ControlPlane.COL_PROCESS_ID,
+        ControlPlane.COL_INSTANCE_NONCE,
+        ControlPlane.COL_RESPONSE_NONCE,
         ControlPlane.COL_LAST_CALLS,
         ControlPlane.COL_CURRENT_CALLS,
         ControlPlane.COL_LISTENER_CALLS,
@@ -61,6 +65,8 @@ class StatusProvider : ContentProvider() {
                     ControlPlane.COL_LNG -> data.getAsDouble(ControlPlane.COL_LNG) ?: 0.0
                     ControlPlane.COL_HOOKS -> if (data.getAsBoolean(ControlPlane.COL_HOOKS) == true) 1 else 0
                     ControlPlane.COL_REPORT_MOCK -> if (data.getAsBoolean(ControlPlane.COL_REPORT_MOCK) != false) 1 else 0
+                    ControlPlane.COL_PROCESS_ID -> data.getAsInteger(ControlPlane.COL_PROCESS_ID) ?: 0
+                    ControlPlane.COL_BACKEND, ControlPlane.COL_INSTANCE_NONCE, ControlPlane.COL_RESPONSE_NONCE -> data.getAsString(col) ?: ""
                     ControlPlane.COL_UPTIME_MS -> data.getAsLong(ControlPlane.COL_UPTIME_MS) ?: 0L
                     ControlPlane.COL_UPDATED_AT -> data.getAsLong(ControlPlane.COL_UPDATED_AT) ?: 0L
                     ControlPlane.COL_LAST_CALLS, ControlPlane.COL_CURRENT_CALLS,

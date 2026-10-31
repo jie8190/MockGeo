@@ -18,6 +18,8 @@ data class EngineCapability(
     val supportsNetworkProvider: Boolean,
     /** 是否支持逐 tick update（路线/摇杆推进）。 */
     val supportsStreamingUpdate: Boolean,
+    /** Optional bounded first-start initialization window; ordinary engines use the session default. */
+    val startupTimeoutMs: Long? = null,
 )
 
 /**
