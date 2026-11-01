@@ -80,11 +80,13 @@ class XposedEngine(
             CheckResult(
                 name = "系统控制通道",
                 ok = reachable,
-                message = if (reachable) null else "模块未激活或未安装（需在 LSPosed 中启用并勾选 system 作用域）",
+                message = if (reachable) null else "未收到模块回执。需支持 libxposed API 102 的 LSPosed、启用模块并勾选系统框架，安装更新后手动重启",
                 actionKey = "NONE",
             ),
             CheckResult("系统定位钩子", reachable && status?.hooksInstalled == true,
-                if (reachable && status?.hooksInstalled == true) "模块已在系统中加载" else "未确认系统钩子，请检查模块作用域及加载状态"),
+                if (reachable && status?.hooksInstalled == true) "模块已在系统中加载"
+                else if (reachable && !status?.hookDetail.isNullOrBlank()) "系统定位入口未完整加载：${status?.hookDetail}"
+                else "未确认系统钩子，请检查模块作用域及加载状态"),
             CheckResult("模块版本", loadedVersionReady,
                 if (!reachable) "尚未收到加载版本"
                 else if (loadedVersionReady) "已安装并加载 ${status?.moduleVersion}"
@@ -189,6 +191,11 @@ class XposedEngine(
                 lat = c.getDouble(idx(ControlPlane.COL_LAT)),
                 lng = c.getDouble(idx(ControlPlane.COL_LNG)),
                 hooksInstalled = c.getInt(idx(ControlPlane.COL_HOOKS)) != 0,
+                hookDetail = idx(ControlPlane.COL_HOOK_DETAIL).let { if (it < 0) "" else c.getString(it).orEmpty() },
+                leaseRemainingMs = idx(ControlPlane.COL_LEASE_REMAINING_MS).let { if (it < 0) 0 else c.getLong(it) },
+                leaseExpirations = idx(ControlPlane.COL_LEASE_EXPIRATIONS).let { if (it < 0) 0 else c.getLong(it) },
+                rewrittenCallbacks = idx(ControlPlane.COL_REWRITTEN_CALLBACKS).let { if (it < 0) 0 else c.getLong(it) },
+                unmatchedCallbacks = idx(ControlPlane.COL_UNMATCHED_CALLBACKS).let { if (it < 0) 0 else c.getLong(it) },
                 uptimeMs = c.getLong(idx(ControlPlane.COL_UPTIME_MS)),
                 updatedAt = c.getLong(idx(ControlPlane.COL_UPDATED_AT)),
                 moduleVersion = c.getString(idx(ControlPlane.COL_MODULE_VERSION)) ?: "",
@@ -256,6 +263,9 @@ class XposedEngine(
                     ?: throw IllegalStateException("no status receipt from module (module not active?)")
                 if (!st.isFresh(clock.currentTimeMillis())) {
                     throw IllegalStateException("status receipt stale (module restarted?)")
+                }
+                if (enabled && !st.hooksInstalled) {
+                    throw IllegalStateException("系统定位入口未完整加载：${st.hookDetail}")
                 }
                 if (st.enabled != enabled) {
                     throw IllegalStateException("module state divergence: enabled=${st.enabled} expected=$enabled")
@@ -335,6 +345,11 @@ class XposedEngine(
         val processId: Int = 0,
         val instanceNonce: String = "",
         val responseNonce: String = "",
+        val hookDetail: String = "",
+        val leaseRemainingMs: Long = 0L,
+        val leaseExpirations: Long = 0L,
+        val rewrittenCallbacks: Long = 0L,
+        val unmatchedCallbacks: Long = 0L,
     ) {
         fun isFresh(nowMs: Long): Boolean =
             updatedAt > 0 && nowMs - updatedAt in 0..ControlPlane.STATUS_FRESH_MS

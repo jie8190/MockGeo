@@ -1,7 +1,7 @@
 name=MockGeo
 author=MockGeo Rebuild
 description=System-level location simulation module for MockGeo (control plane via sendExtraCommand, receipts via status provider)
-versionName=0.3.10
-versionCode=13
+versionName=0.3.13
+versionCode=16
 minApiVersion=102
 targetApiVersion=102

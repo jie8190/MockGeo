@@ -7,7 +7,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Android-8.0%2B%20(API%2026--36)-3DDC84?logo=android&logoColor=white" alt="Android 8.0+"/>
-  <img src="https://img.shields.io/badge/Kotlin-2.1%20%2B%20Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin"/>
+  <img src="https://img.shields.io/badge/Kotlin-2.2%20%2B%20Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin"/>
   <img src="https://img.shields.io/badge/NDK-C%2B%2B23%20%2F%20LSPlant-00599C?logo=cplusplus&logoColor=white" alt="NDK C++23 / LSPlant"/>
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License MIT"/>
 </p>
@@ -17,8 +17,8 @@
 ## ✨ 核心特性
 
 ### 1. 运行模式
-- **LSPosed 模式 (`xposed`)**：基于 `libxposed API 100+` 注入 `system_server`，在系统定位服务出口直接合成并分发位置，无需污染系统底层 Provider 缓存，**停止模拟后无需重启即可立即恢复真实物理位置**。
-- **Root 直连 (`root`，实验)**：主应用内置 ARM64 加载器和系统定位载荷，通过 Root 加载并校验独立的系统进程回执，无需另装 MockGeo 模块 APK。已通过真机隔离进程测试，并在 Xiaomi 15 / Android 16 / KernelSU 上完成 **真实 system_server 的纯 Root 系统定位验收**：公开定位 API、WebView、PendingIntent/取消/注销/flush、GNSS/NMEA及动态豁免与停止恢复均通过。当前拒绝与驻留的 LSPosed ART 框架叠加运行，需要先停用 LSPosed 注入并手动重启，或继续使用 LSPosed 模式。Root 路径暂不覆盖应用进程内传感器/SDK 缓存钩子。
+- **LSPosed 模式 (`xposed`)**：需要支持 `libxposed API 102` 的框架，注入 `system_server`，在系统定位服务出口直接合成并分发位置，无需污染系统底层 Provider 缓存，**停止模拟后无需重启即可立即恢复真实物理位置**。
+- **Root 直连 (`root`，实验)**：主应用内置 ARM64 加载器和系统定位载荷，通过 Root 加载并校验独立的系统进程回执，无需另装 MockGeo 模块 APK。Root **0.1.0** 已在 Xiaomi 15 / Android 16 / KernelSU 上完成隔离进程及真实系统定位验收；本版 **0.1.1** 更新了共用钩子，尚未单独完成纯 Root 真机复测。当前拒绝与驻留的 LSPosed ART 框架叠加运行，需要先停用 LSPosed 注入并手动重启，或继续使用 LSPosed 模式。Root 路径暂不覆盖应用进程内传感器/SDK 缓存钩子。
 - **标准模式 (`provider`)**：无需 Root，通过 Android 系统「开发者选项 → 模拟位置信息应用」运行。
 
 ### 2. 深度无痕与多维环境证据链同步
@@ -45,15 +45,19 @@ LSPosed 模式提供下列可配置的模拟输出。系统接口验收不代表
 
 ## 📦 下载与安装
 
-当前版本：主应用 **0.4.3** · 内置 Root 载荷 **0.1.0** · 可选 LSPosed 模块 **0.3.12**。
+当前版本：主应用 **0.4.5** · 内置 Root 载荷 **0.1.1** · 可选 LSPosed 模块 **0.3.13**。
 
-[下载 v0.4.3](https://github.com/jie8190/MockGeo/releases/tag/v0.4.3) · [更新日志](CHANGELOG.md) · [验证范围](docs/VERIFICATION_0.4.3.md)
+[下载 v0.4.5](https://github.com/jie8190/MockGeo/releases/tag/v0.4.5) · [更新日志](CHANGELOG.md) · [诊断验证](docs/VERIFICATION_0.4.5.md) · [定位与后台验证](docs/VERIFICATION_0.4.4.md)
 
 | 安装包文件 | 包名 | 说明 |
 | :--- | :--- | :--- |
-| **`MockGeo-v0.4.3-app.apk`** | `com.mockgeo.app` | 主应用；Root 载荷已内置，无需另装模块 |
-| **`MockGeo-v0.3.12-module.apk`** | `com.mockgeo.module` | 仅 LSPosed 模式需要；本轮通过构建/单测/Lint，未完成单独真机验收 |
-| `SHA256SUMS.txt` | — | 两个 APK 的 SHA-256 校验值 |
+| **`MockGeo-v0.4.5-app.apk`** | `com.mockgeo.app` | 主应用；Root 载荷已内置 |
+| **`MockGeo-v0.3.13-module.apk`** | `com.mockgeo.module` | 仅 LSPosed 模式需要；完整安装后手动重启 |
+| `MockGeo-probe-v1.2.apk` | `com.mockgeo.probe` | 可选：独立定位检查，供测试使用 |
+| `MockGeo-v0.4.5-androidTest.apk` | `com.mockgeo.app.test` | 可选：配合仓库自动化验收脚本使用，无桌面入口 |
+| `SHA256SUMS.txt` | — | 四个 APK 的 SHA-256 校验值 |
+
+从正式版 0.4.3 升级时，LSP 用户需同步更新模块 0.3.13；Root 用户若已加载旧载荷，需手动重启后再启动新载荷。已加载内部版模块 0.3.13 / Root 0.1.1 的用户，只更新主包即可。保持原签名覆盖安装，无需卸载应用。
 
 ### 快速上手
 
@@ -71,6 +75,20 @@ LSPosed 模式提供下列可配置的模拟输出。系统接口验收不代表
 1. 打开 `MockGeo` $\rightarrow$ **偏好设置** $\rightarrow$ **地图与图层** $\rightarrow$ 点击 **「自定义高德密钥 (可选)」**；
 2. 点击弹窗内的 **「查看申请 Key 所需的包名与签名信息」**，一键复制 `应用包名 (com.mockgeo.app)` 与 `签名 SHA1`；
 3. 前往 [高德开放平台控制台](https://lbs.amap.com/) 创建应用并绑定上述包名与 SHA1，获取免费的「Android 平台 SDK Key」粘贴回弹窗保存即可。
+
+### 熄屏后模拟停止
+
+如果亮屏正常、熄屏后十几秒停止，请检查 **MockGeo 的应用省电策略**。小米/HyperOS 可在应用详情的省电设置中选择 **不受限制**；仅加入 Android「忽略电池优化」名单不一定有效。本机对照曾确认：主应用虽然保持前台服务和 CPU 唤醒锁，仍被自动省电冻结，随后因心跳中断而自动停止；改为厂商的“不受限制”后，控制心跳恢复稳定。详细测试条件见 [0.4.4 验证说明](docs/VERIFICATION_0.4.4.md)。
+
+使用墓碑/冻结管理功能时，也应允许 MockGeo 在模拟期间运行。其它 ROM 的设置名称和效果需按实际设备验证，不要把一台设备的结果视为全部机型已适配。
+
+### 诊断与反馈（0.4.5 起）
+
+在 **运行状态 → 运行环境 → 后台持续运行** 可查看省电设置步骤并打开本应用设置。
+
+遇到问题后，先复现，再进入 **偏好设置 → 诊断与反馈**：选择 **保存诊断日志** 下载文本附件，或选择 **邮件反馈（附日志）** 打开邮件草稿。日志包含设备与运行状态、当前进程的近期事件；已过滤地图 Key 等敏感字段，可先保存查看再发送。应用重启前的内存日志不会保留。
+
+联系邮箱：**kprxr.660@qq.com**。关于区域也提供邮件联系与复制邮箱。请在邮件中补充发生时间、现象和操作步骤；应用不会自动发送邮件。
 
 ---
 

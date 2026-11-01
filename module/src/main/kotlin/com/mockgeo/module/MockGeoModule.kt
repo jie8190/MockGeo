@@ -10,7 +10,7 @@ import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam
  * LSPosed 模块入口（libxposed API 102）。
  *
  * 生命周期：LSPosed 实例化（无参构造 + attachFramework）→ onSystemServerStarting
- * → 安装 hook（失败 5s 重试，最多 3 次——HLocation 的 SysRetry 模式）。
+ * → 安装 hook；按关键入口检查并在服务发布后重试（安装幂等）。
  *
  * fail-safe：system_server 每次重启，模块静态状态归零，enabled 默认 false
  * （docs/06 §4 第 5 条：宁可少模拟一秒，不多模拟一小时）。
@@ -20,7 +20,7 @@ class MockGeoModule : XposedModule() {
     override fun onSystemServerStarting(param: SystemServerStartingParam) {
         ModuleConfig.loadedAtMs = System.currentTimeMillis()
         ModuleLog.d("=== onSystemServerStarting: installing hooks ===")
-        installWithRetry(param.classLoader, firstAttempt = true)
+        installWithRetry(param.classLoader)
     }
 
     /**
@@ -32,23 +32,19 @@ class MockGeoModule : XposedModule() {
             .onFailure { ModuleLog.e("app-scope install failed", it) }
     }
 
-    private fun installWithRetry(classLoader: ClassLoader, firstAttempt: Boolean) {
-        val count = runCatching { HookInstaller.install(this, classLoader) }
-            .getOrElse {
-                ModuleLog.e("install crashed", it)
-                0
-            }
-        if (count > 0) return
-        if (!firstAttempt) return // 重试也失败：放弃（ROM 不兼容，日志已留证据）
-        // 首装失败（类未就绪等）：5s 后重试一次
+    private fun installWithRetry(classLoader: ClassLoader) {
+        fun attempt() = runCatching { HookInstaller.install(this, classLoader) }
+            .onFailure { ModuleLog.e("install crashed", it) }
+        attempt()
+        if (ModuleConfig.hooksReady && HookInstaller.liveServiceFound) return
+        // onSystemServerStarting may precede publication of an OEM service subclass.
         Thread({
-            try {
-                Thread.sleep(5_000L)
-            } catch (ie: InterruptedException) {
-                return@Thread
+            for (delay in listOf(5_000L, 10_000L, 20_000L, 30_000L)) {
+                try { Thread.sleep(delay) } catch (_: InterruptedException) { return@Thread }
+                attempt()
+                if (ModuleConfig.hooksReady && HookInstaller.liveServiceFound) return@Thread
             }
-            ModuleLog.d("retry: installing hooks after 5s")
-            runCatching { installWithRetry(classLoader, firstAttempt = false) }
+            ModuleLog.w("system hook retries exhausted: ${ModuleConfig.hookDetail}")
         }, "MockGeo-SysRetry").apply {
             isDaemon = true
             start()

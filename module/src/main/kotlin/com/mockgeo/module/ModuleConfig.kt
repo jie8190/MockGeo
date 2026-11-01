@@ -76,6 +76,10 @@ class ModuleConfig private constructor(
         /** hook 安装成功数（诊断回执）。 */
         @Volatile
         var hooksInstalled: Int = 0
+        @Volatile var hooksReady: Boolean = false
+        @Volatile var hookDetail: String = "not installed"
+        @Volatile var leaseExpirations: Long = 0L
+            private set
 
         const val LEASE_TIMEOUT_MS = 15_000L
         private var leaseExpiresAtMs = 0L
@@ -84,10 +88,15 @@ class ModuleConfig private constructor(
         fun snapshot(nowMs: Long = android.os.SystemClock.elapsedRealtime()): ModuleConfig {
             if (current.enabled && nowMs >= leaseExpiresAtMs) {
                 current = current.with(enabled = false)
+                leaseExpirations++
                 ModuleLog.w("controller lease expired; simulation disabled")
             }
             return current
         }
+
+        @Synchronized
+        fun leaseRemainingMs(nowMs: Long = android.os.SystemClock.elapsedRealtime()): Long =
+            if (current.enabled) (leaseExpiresAtMs - nowMs).coerceAtLeast(0L) else 0L
 
         /**
          * 应用新配置并盖章 revision。revision 单调：只接受更新的 revision
@@ -152,6 +161,9 @@ class ModuleConfig private constructor(
             )
             loadedAtMs = 0L
             hooksInstalled = 0
+            hooksReady = false
+            hookDetail = "not installed"
+            leaseExpirations = 0L
         }
     }
 }

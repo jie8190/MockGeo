@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import com.mockgeo.app.MainActivity
 import com.mockgeo.app.overlay.JoystickOverlayService
 import com.mockgeo.core.model.*
@@ -26,13 +27,27 @@ class SimulationService : Service() {
     private var finishing = false
     private var foreground = false
     private val notifications by lazy { getSystemService(NotificationManager::class.java) }
+    private val wakeLock by lazy {
+        getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MockGeo:simulation")
+            .apply { setReferenceCounted(false) }
+    }
+    private val powerLease by lazy {
+        SessionPowerLease({ timeout -> wakeLock.acquire(timeout) }, { if (wakeLock.isHeld) wakeLock.release() })
+    }
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         notifications.createNotificationChannel(NotificationChannel(CHANNEL_ID, "位置模拟状态", NotificationManager.IMPORTANCE_LOW))
         scope.launch {
+            while (isActive) {
+                refreshPowerLease()
+                delay(SessionPowerLease.RENEW_MS)
+            }
+        }
+        scope.launch {
             controller.ui.collect { ui ->
+                refreshPowerLease()
                 if (ui.engineState is EngineState.Running) {
                     notifications.notify(NOTIF_ID, buildNotification(ui))
                 } else if (acceptedCommand && !commandActive) settle()
@@ -41,6 +56,7 @@ class SimulationService : Service() {
         scope.launch {
             for (intent in commands) {
                 commandActive = true
+                refreshPowerLease()
                 try {
                     (application as com.mockgeo.app.MockGeoApp).ready.await()
                     when (intent.action) {
@@ -95,6 +111,7 @@ class SimulationService : Service() {
     }
 
     private fun settle() {
+        refreshPowerLease()
         if (commandActive || !commands.isEmpty || !acceptedCommand) return
         when (val state = controller.ui.value.engineState) {
             EngineState.Idle -> {
@@ -120,12 +137,21 @@ class SimulationService : Service() {
             pending.getStringExtra(EXTRA_ROUTE_TOKEN)?.let { pendingRoutes.remove(it) }
         }
         scope.cancel()
+        powerLease.close()
         JoystickOverlayService.stop(this)
         if (!finishing) {
             val cleanup = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
             cleanup.launch { try { controller.stop() } finally { cleanup.cancel() } }
         }
         super.onDestroy()
+    }
+
+    private fun refreshPowerLease() {
+        val state = controller.ui.value.engineState
+        runCatching {
+            powerLease.refresh(commandActive || state is EngineState.Starting ||
+                state is EngineState.Running || state is EngineState.Stopping)
+        }.onFailure { android.util.Log.w("MockGeoPower", "CPU wake lease unavailable", it) }
     }
 
     private fun position(intent: Intent) = LatLng(number(intent, EXTRA_LAT), number(intent, EXTRA_LNG))

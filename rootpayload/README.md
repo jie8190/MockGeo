@@ -10,8 +10,9 @@ shared recipient-specific location hooks. A Root-specific command provider and
 process/version/nonce checks keep LSPosed receipts from satisfying Root startup.
 
 The first implementation targets ARM64. Do not inject alongside an existing
-LSPosed ART runtime. System acceptance passed on Xiaomi 15 / Android 16 / KernelSU with LSPosed absent.
-Other ROMs and app-process sensor hooks are outside this verified scope.
+LSPosed ART runtime. Payload 0.1.0 passed system acceptance on Xiaomi 15 / Android 16 / KernelSU with LSPosed absent.
+The current payload 0.1.1 updates the shared hook layer; a separate pure-Root device rerun is still pending.
+Other ROMs and app-process sensor hooks are outside the verified scope.
 
 ## Build
 
@@ -57,6 +58,10 @@ for Clang 18; these sentinel branches are discarded for real hook callbacks.
 Dobby is pinned to its complete Android implementation at `9c85e74f`.
 
 ## Current verification
+
+Current distribution: main app 0.4.5 / Root payload 0.1.1. Shared hooks were tested through
+LSPosed module 0.3.13 on the Android 16 device; this does not replace independent Root 0.1.1 verification.
+See [the compatibility report](../docs/VERIFICATION_0.4.4.md). The following is historical 0.1.0 evidence.
 
 Main app 0.4.3 / Root payload 0.1.0: build, 166 JVM/debug tests and Lint pass.
 Two disposable-VM runs on the Android 16 ARM64 device passed real remote loading,

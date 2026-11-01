@@ -53,6 +53,11 @@ object CommandDispatcher {
             return
         }
         val enabled = b.getBoolean(ControlPlane.KEY_ENABLED, false)
+        if (enabled && !ModuleConfig.hooksReady) {
+            writeAck(b, success = false, error = "system hooks incomplete: ${ModuleConfig.hookDetail}")
+            StatusWriter.write(ModuleConfig.snapshot())
+            return
+        }
         val beginningSession = enabled && !ModuleConfig.snapshot().enabled
         val hasPosition = b.containsKey(ControlPlane.KEY_LAT) && b.containsKey(ControlPlane.KEY_LNG)
 
@@ -98,7 +103,7 @@ object CommandDispatcher {
             putLong(ControlPlane.KEY_STATUS_REVISION, cfg.revision)
             putDouble(ControlPlane.KEY_STATUS_LAT, cfg.lat)
             putDouble(ControlPlane.KEY_STATUS_LNG, cfg.lng)
-            putBoolean(ControlPlane.KEY_STATUS_HOOKS, ModuleConfig.hooksInstalled > 0)
+            putBoolean(ControlPlane.KEY_STATUS_HOOKS, ModuleConfig.hooksReady)
             putLong(ControlPlane.KEY_STATUS_UPTIME_MS, StatusWriter.uptimeMs())
         }
         // 主回执通道也刷新一次（App 可能只看 provider）

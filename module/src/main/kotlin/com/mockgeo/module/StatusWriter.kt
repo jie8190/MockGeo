@@ -32,7 +32,12 @@ object StatusWriter {
                 put(ControlPlane.COL_REVISION, cfg.revision)
                 put(ControlPlane.COL_LAT, cfg.lat)
                 put(ControlPlane.COL_LNG, cfg.lng)
-                put(ControlPlane.COL_HOOKS, ModuleConfig.hooksInstalled > 0)
+                put(ControlPlane.COL_HOOKS, ModuleConfig.hooksReady)
+                put(ControlPlane.COL_HOOK_DETAIL, ModuleConfig.hookDetail)
+                put(ControlPlane.COL_LEASE_REMAINING_MS, ModuleConfig.leaseRemainingMs())
+                put(ControlPlane.COL_LEASE_EXPIRATIONS, ModuleConfig.leaseExpirations)
+                put(ControlPlane.COL_REWRITTEN_CALLBACKS, HookDiagnostics.rewrittenCallbacks.get())
+                put(ControlPlane.COL_UNMATCHED_CALLBACKS, HookDiagnostics.unmatchedCallbacks.get())
                 put(ControlPlane.COL_UPTIME_MS, uptimeMs())
                 put(ControlPlane.COL_UPDATED_AT, System.currentTimeMillis())
                 put(ControlPlane.COL_MODULE_VERSION, ModuleRuntime.version)
@@ -131,5 +136,5 @@ object StatusWriter {
         }
     }
 
-    const val MODULE_VERSION = "0.3.12"
+    const val MODULE_VERSION = "0.3.13"
 }

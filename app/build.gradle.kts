@@ -32,7 +32,7 @@ val packageRootAssets by tasks.registering {
         val output = rootAssets.get().dir("root").asFile.apply { mkdirs() }
         val artifacts = listOf("payload.apk" to rootPayload.asFile, "libmockgeo_root.so" to rootLibrary.asFile,
             "loader" to rootLoader.asFile)
-        val properties = Properties().apply { setProperty("version", "0.1.0") }
+        val properties = Properties().apply { setProperty("version", "0.1.1") }
         for ((name, source) in artifacts) {
             source.copyTo(output.resolve(name), overwrite = true)
             val digest = MessageDigest.getInstance("SHA-256").digest(source.readBytes())
@@ -57,8 +57,8 @@ android {
         applicationId = "com.mockgeo.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.4.3"
+        versionCode = 9
+        versionName = "0.4.5"
         buildConfigField("String", "AMAP_API_KEY", "\"$amapApiKey\"")
         manifestPlaceholders["AMAP_API_KEY"] = amapApiKey
         testInstrumentationRunner = "com.mockgeo.app.DeviceSmokeInstrumentation"

@@ -84,8 +84,13 @@ class ModuleConfigTest {
     @Test
     fun `controller death expires lease without system server restart`() {
         ModuleConfig.apply(1, nowMs = 100) { it.with(enabled = true) }
+        assertThat(ModuleConfig.leaseRemainingMs(100)).isEqualTo(15_000L)
         assertThat(ModuleConfig.snapshot(14_999).enabled).isTrue()
         assertThat(ModuleConfig.snapshot(15_100).enabled).isFalse()
+        assertThat(ModuleConfig.leaseRemainingMs(15_100)).isEqualTo(0L)
+        assertThat(ModuleConfig.leaseExpirations).isEqualTo(1L)
+        ModuleConfig.snapshot(16_000)
+        assertThat(ModuleConfig.leaseExpirations).isEqualTo(1L)
         // Retrying an old SET cannot bring a stopped session back to life.
         ModuleConfig.apply(1, nowMs = 16_000) { it.with(enabled = true) }
         assertThat(ModuleConfig.snapshot(16_000).enabled).isFalse()
@@ -96,6 +101,7 @@ class ModuleConfigTest {
         ModuleConfig.apply(1, nowMs = 100) { it.with(enabled = true) }
         ModuleConfig.apply(2, nowMs = 10_000) { it.with(enabled = true) }
         assertThat(ModuleConfig.snapshot(15_100).enabled).isTrue()
+        assertThat(ModuleConfig.leaseExpirations).isEqualTo(0L)
         assertThat(ModuleConfig.snapshot(25_000).enabled).isFalse()
     }
 

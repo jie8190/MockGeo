@@ -33,10 +33,21 @@ class ProbeActivity : Activity() {
     private var expectedLng = 116.3975
     private var started = 0L
     private var finished = false
+    private var durationMs = 60_000L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Explicit test-only opt-in: show this fixture over keyguard without dismissing it.
+        // The device remains secured; no other application's UI is exposed.
+        if (intent.getBooleanExtra("showWhenLocked", false)) {
+            if (Build.VERSION.SDK_INT >= 27) setShowWhenLocked(true)
+            else {
+                @Suppress("DEPRECATION")
+                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
+            }
+        }
         manager = getSystemService(LocationManager::class.java)
+        durationMs = intent.getIntExtra("durationMs", 60_000).coerceIn(20_000, 180_000).toLong()
         expectedLat = intent.getStringExtra("lat")?.toDoubleOrNull()?.takeIf { it in -90.0..90.0 } ?: expectedLat
         expectedLng = intent.getStringExtra("lng")?.toDoubleOrNull()?.takeIf { it in -180.0..180.0 } ?: expectedLng
         output = TextView(this).apply { textSize = 15f; setPadding(24, 36, 24, 24) }
@@ -59,16 +70,15 @@ class ProbeActivity : Activity() {
     @SuppressLint("MissingPermission", "SetJavaScriptEnabled")
     private fun begin() {
         started = SystemClock.elapsedRealtime()
-        output.text = "独立定位检查 · UID ${android.os.Process.myUid()}\n预期 ${expectedLat}, ${expectedLng}\n检查 GPS / 网络 / 融合 / WebView，一共 20 秒。\n\n"
+        output.text = "独立定位检查 · UID ${android.os.Process.myUid()}\n预期 ${expectedLat}, ${expectedLng}\n检查 GPS / 网络 / 融合 / WebView，一共 ${durationMs / 1000} 秒，记录全程回调。\n\n"
         record("probe", "begin", JSONObject().put("uid", android.os.Process.myUid()))
         for (provider in listOf("gps", "network", "fused")) {
             try { recordLocation(provider, "last", manager.getLastKnownLocation(provider)) }
             catch (error: Exception) { recordError(provider, "last", error) }
             try {
-                var count = 0
                 val listener = object : LocationListener {
                     override fun onLocationChanged(location: Location) {
-                        if (count++ < 3) recordLocation(provider, "updates", location)
+                        recordLocation(provider, "updates", location)
                     }
                     override fun onProviderEnabled(provider: String) = Unit
                     override fun onProviderDisabled(provider: String) = Unit
@@ -122,7 +132,7 @@ class ProbeActivity : Activity() {
                 release()
                 output.append("\n检查完成，结果写入本应用 report.json。\n")
             }
-        }, 20_000)
+        }, durationMs)
     }
 
     private fun recordLocation(provider: String, api: String, location: Location?) {
@@ -145,7 +155,8 @@ class ProbeActivity : Activity() {
         value.put("provider", provider).put("api", api).put("elapsedMs", SystemClock.elapsedRealtime() - started)
         events.put(value)
         output.append("$provider/$api : $value\n")
-        File(filesDir, "report.json").writeText(JSONObject().put("runId", intent.getStringExtra("runId")).put("events", events).toString(2))
+        File(filesDir, "report.json").writeText(JSONObject().put("runId", intent.getStringExtra("runId"))
+            .put("durationMs", durationMs).put("events", events).toString(2))
     }
     @SuppressLint("MissingPermission")
     private fun release() {

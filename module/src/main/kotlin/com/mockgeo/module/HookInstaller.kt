@@ -6,7 +6,6 @@ import android.os.Binder
 import com.mockgeo.core.model.ControlPlane
 import io.github.libxposed.api.XposedInterface
 import java.lang.reflect.Method
-import java.lang.reflect.Modifier
 
 /** Recipient-bound output hooks. Provider caches and global Parcel methods remain untouched. */
 object HookInstaller {
@@ -23,26 +22,47 @@ object HookInstaller {
 
     @Volatile var installedCount = 0
         private set
+    private val hooked = mutableSetOf<Method>()
+    private val covered = mutableSetOf<String>()
+    private val inServiceCall = ThreadLocal.withInitial { false }
+    private var evidenceInstalled = false
+    @Volatile var liveServiceFound = false
+        private set
 
+    @Synchronized
     fun install(api: XposedInterface, loader: ClassLoader): Int {
-        installedCount = 0
-        val cls = listOf("com.android.server.location.LocationManagerService", "com.android.server.LocationManagerService")
-            .firstNotNullOfOrNull { name -> runCatching { Class.forName(name, false, loader) }.getOrNull() }
-        if (cls != null) {
-            var current: Class<*>? = cls
-            while (current != null && current != Any::class.java) {
-                current.declaredMethods.filter { it.name in names && !Modifier.isAbstract(it.modifiers) }.forEach { method ->
-                    hook(api, method) { call -> dispatch(method.name, call) }
-                }
-                current = current.superclass
+        val live = FrameworkAccess.localLocationService()
+        liveServiceFound = live != null
+        val classes = (listOfNotNull(live?.javaClass) +
+            listOf("com.android.server.location.LocationManagerService", "com.android.server.LocationManagerService")
+                .mapNotNull { name -> runCatching { Class.forName(name, false, loader) }.getOrNull() }).distinct()
+        for (cls in classes) {
+            FrameworkAccess.methods(cls).filter { it.name in names }.forEach { method ->
+                if (hook(api, method) { call ->
+                    // A vendor override may invoke its hooked superclass. Apply policy once.
+                    if (inServiceCall.get() == true) call.proceed() else {
+                        inServiceCall.set(true)
+                        try { dispatch(method.name, call) } finally { inServiceCall.remove() }
+                    }
+                }) covered += method.name
             }
-        } else ModuleLog.w("LocationManagerService not found")
-        installPendingTransports(api, loader)
-        installPendingPayloads(api)
-        installListenerDispatch(api, loader)
-        installedCount += EvidenceHooks.install(api, loader)
+        }
+        if (classes.isEmpty()) ModuleLog.w("LocationManagerService not found")
+        // Failure in one optional transport must not prevent installation of the others.
+        runCatching { installPendingTransports(api, loader) }.onFailure { ModuleLog.w("pending transport install failed", it) }
+        runCatching { installPendingPayloads(api) }.onFailure { ModuleLog.w("pending payload install failed", it) }
+        runCatching { installListenerDispatch(api, loader) }.onFailure { ModuleLog.w("listener dispatch install failed", it) }
+        if (!evidenceInstalled) {
+            runCatching { EvidenceHooks.install(api, loader) }.onSuccess {
+                installedCount += it
+                evidenceInstalled = true
+            }.onFailure { ModuleLog.w("evidence install failed", it) }
+        }
+        val missing = HookReadiness.missing(covered, android.os.Build.VERSION.SDK_INT)
         ModuleConfig.hooksInstalled = installedCount
-        ModuleLog.d("install finished: $installedCount recipient hooks")
+        ModuleConfig.hooksReady = missing.isEmpty()
+        ModuleConfig.hookDetail = if (missing.isEmpty()) "ready ($installedCount)" else "missing: ${missing.joinToString()}; installed=$installedCount"
+        ModuleLog.d("install finished: ${ModuleConfig.hookDetail}; liveService=$liveServiceFound")
         return installedCount
     }
 
@@ -60,8 +80,9 @@ object HookInstaller {
         }
     }
 
-    private fun hook(api: XposedInterface, method: Method, dispatch: (Call) -> Any?) {
-        runCatching {
+    private fun hook(api: XposedInterface, method: Method, dispatch: (Call) -> Any?): Boolean {
+        if (method in hooked) return true
+        return runCatching {
             api.hook(method).intercept(XposedInterface.Hooker { chain ->
                 val call = Call(chain)
                 val value = try { dispatch(call) } catch (error: Throwable) {
@@ -71,8 +92,10 @@ object HookInstaller {
                 }
                 if (method.returnType == Void.TYPE) null else value
             })
+            hooked += method
             installedCount++
-        }.onFailure { ModuleLog.w("hook ${method.name} install failed", it) }
+            true
+        }.getOrElse { ModuleLog.w("hook ${method.declaringClass.name}.${method.name} install failed", it); false }
     }
 
     private fun dispatch(name: String, call: Call): Any? {
@@ -153,9 +176,8 @@ object HookInstaller {
         var count = 0
         candidates.forEach { name ->
             val cls = runCatching { Class.forName(name, false, loader) }.getOrNull() ?: return@forEach
-            val pending = cls.declaredFields.firstOrNull { it.type == PendingIntent::class.java } ?: return@forEach
-            pending.isAccessible = true
-            cls.declaredMethods.filter { it.name in setOf("deliverOnLocationChanged", "callLocationChangedLocked") }.forEach { m ->
+            val pending = FrameworkAccess.field(cls, PendingIntent::class.java) ?: return@forEach
+            FrameworkAccess.methods(cls).filter { it.name in setOf("deliverOnLocationChanged", "callLocationChangedLocked") }.forEach { m ->
                 val before = installedCount
                 hook(api, m) { call ->
                     val intent = pending.get(call.receiver) as? PendingIntent
@@ -180,29 +202,37 @@ object HookInstaller {
     /** OEM power optimization reconstructs ILocationListener from its Binder, discarding wrappers. */
     private fun installListenerDispatch(api: XposedInterface, loader: ClassLoader) {
         val listener = Class.forName("android.location.ILocationListener", false, loader)
-        val proxy = Class.forName("android.location.ILocationListener\$Stub\$Proxy", false, loader)
-        proxy.declaredMethods.filter { it.name == "onLocationChanged" }.forEach { method ->
-            hook(api, method) { call ->
+        val proxy = runCatching { Class.forName("android.location.ILocationListener\$Stub\$Proxy", false, loader) }.getOrNull()
+        proxy?.declaredMethods?.filter { it.name == "onLocationChanged" }?.forEach { method ->
+            if (hook(api, method) { call ->
                 LocationDelivery.outgoing(call.receiver, call.args.toTypedArray()) { call.proceed(it) }
-            }
+            }) covered += "onLocationChanged"
         }
         for (name in listOf("com.android.server.location.provider.LocationProviderManager", "com.android.server.location.LocationProviderManager")) {
             val cls = runCatching { Class.forName(name, false, loader) }.getOrNull() ?: continue
-            val getName = cls.getMethod("getName")
-            cls.declaredMethods.filter { it.name == "registerLocationRequest" && it.parameterTypes.contains(listener) }.forEach { method ->
+            FrameworkAccess.methods(cls).filter { it.name == "registerLocationRequest" && it.parameterTypes.contains(listener) }.forEach { method ->
                 hook(api, method) { call ->
-                    val identity = call.args.firstOrNull { it?.javaClass?.name?.endsWith(".CallerIdentity") == true }
-                    val uid = identity?.javaClass?.getMethod("getUid")?.invoke(identity) as? Int
-                    val provider = getName.invoke(call.receiver) as? String
+                    val identity = call.args.firstOrNull { arg -> arg != null &&
+                        FrameworkAccess.hierarchy(arg.javaClass).any { it.name.endsWith(".CallerIdentity") } }
+                    val uid = identity?.let { FrameworkAccess.value(it, "getUid", "uid", "mUid") } as? Int
+                    val provider = call.receiver?.let { FrameworkAccess.value(it, "getName", "mName") } as? String
                     val candidate = call.args.firstOrNull { listener.isInstance(it) }
                     val change = if (uid != null && provider != null)
                         LocationDelivery.registerValidated(candidate, provider, uid, RequestPolicy.from(call.args).maxUpdates) else null
                     try { call.proceed() } catch (error: Throwable) { LocationDelivery.rollback(change); throw error }
                 }
             }
-            // Ensure precompiled callers dispatch through the replaced Binder proxy method.
-            runCatching { Class.forName(name + "\$LocationListenerTransport", false, loader).declaredMethods
-                .filter { it.name == "deliverOnLocationChanged" }.forEach { api.deoptimize(it) } }
+            // Rewrite at the transport as well: an AOT-inlined Binder proxy can bypass its hook.
+            runCatching {
+                val transport = Class.forName(name + "\$LocationListenerTransport", false, loader)
+                val target = FrameworkAccess.field(transport, listener) ?: return@runCatching
+                FrameworkAccess.methods(transport).filter { it.name == "deliverOnLocationChanged" }.forEach { method ->
+                    if (hook(api, method) { call ->
+                        LocationDelivery.outgoing(target.get(call.receiver), call.args.toTypedArray()) { call.proceed(it) }
+                    }) covered += "listenerTransport"
+                    api.deoptimize(method)
+                }
+            }.onFailure { ModuleLog.w("listener transport unavailable", it) }
         }
         // The provider registration call can itself be inlined into LMS on an AOT ROM.
         for (name in listOf("com.android.server.location.LocationManagerService", "com.android.server.LocationManagerService")) {

@@ -215,7 +215,10 @@ fun SettingsDialog(vm: HomeViewModel, onDismiss: () -> Unit) {
                     }
                 }
             }
+            SectionLabel("诊断与反馈")
+            DiagnosticExportCard(vm)
             SectionLabel("关于 MockGeo")
+            ContactCard(vm)
             Text("支持全球地图选点、沿道路路线模拟、悬浮摇杆实时控制与 GPX 轨迹导入导出。停止模拟后立即恢复手机真实定位。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("地图服务由高德地图或 © OpenStreetMap contributors 提供。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
@@ -281,6 +284,7 @@ fun DiagnosticsDialog(vm: HomeViewModel, onDismiss: () -> Unit) {
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = { vm.refreshChecks(); logs = vm.diagnostics(); refreshed = System.currentTimeMillis() }) { Icon(Icons.Default.Refresh, null, Modifier.size(17.dp)); Text("重新检查") }
             }
+            BackgroundRunGuide(vm)
             checks.forEach { check ->
                 Surface(shape = RoundedCornerShape(15.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
                     Row(Modifier.fillMaxWidth().clickable(enabled = check.actionKey != "NONE" || !check.ok) { onCheck(check) }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -297,7 +301,7 @@ fun DiagnosticsDialog(vm: HomeViewModel, onDismiss: () -> Unit) {
             HorizontalDivider()
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("运行日志 · ${logs.size}", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                TextButton(onClick = { exporter.launch("mockgeo-diagnostics.txt") }) { Icon(Icons.Default.FileDownload, null, Modifier.size(17.dp)); Text("导出") }
+                TextButton(onClick = { exporter.launch(com.mockgeo.app.diagnostics.DiagnosticFiles.suggestedName()) }, enabled = !vm.diagnosticBusy.collectAsState().value) { Icon(Icons.Default.FileDownload, null, Modifier.size(17.dp)); Text("导出") }
             }
             Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

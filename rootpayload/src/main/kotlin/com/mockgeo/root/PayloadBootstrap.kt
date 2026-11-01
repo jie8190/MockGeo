@@ -33,10 +33,7 @@ object PayloadBootstrap {
                 ModuleRuntime.activateRoot(BuildConfig.VERSION_NAME, nonce)
                 ModuleConfig.loadedAtMs = System.currentTimeMillis()
                 HookInstaller.install(api, checkNotNull(loader))
-                val required = setOf("sendExtraCommand", "getLastLocation", "getCurrentLocation",
-                    "registerLocationListener", "unregisterLocationListener", "onLocationChanged")
-                val installed = api.installedMethods.map { it.name }.toSet()
-                check(installed.containsAll(required)) { "Missing system hooks: ${required - installed}" }
+                check(ModuleConfig.hooksReady) { "Missing system hooks: ${ModuleConfig.hookDetail}" }
                 report.put("hooks", api.installedMethods.size)
             }
             report.put("ready", true)
@@ -58,12 +55,14 @@ object PayloadBootstrap {
         fun service(name: String): IBinder {
             val binder = Class.forName("android.os.ServiceManager").getDeclaredMethod("getService", String::class.java)
                 .invoke(null, name) as? IBinder
-            check(binder != null && binder.javaClass.name.startsWith("com.android.server.")) {
+            check(binder is android.os.Binder) {
                 "$name is not a local system service"
             }
             return binder
         }
-        val location = service("location").javaClass.classLoader ?: error("Missing system class loader")
+        val locationService = service("location")
+        check(Class.forName("android.location.ILocationManager").isInstance(locationService)) { "Not a local location manager" }
+        val location = locationService.javaClass.classLoader ?: error("Missing system class loader")
         val wifi = runCatching { service("wifi").javaClass.classLoader }.getOrNull()
         // Never load a second copy of services.jar: it would not affect the live service.
         return if (wifi == null || wifi === location) location else object : ClassLoader(location) {

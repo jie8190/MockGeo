@@ -12,11 +12,15 @@ p = argparse.ArgumentParser()
 p.add_argument("--adb", default="adb")
 p.add_argument("--serial", required=True)
 p.add_argument("--require-sensors", action="store_true")
-p.add_argument("--module", default="0.3.12")
+p.add_argument("--module")
 p.add_argument("--engine", choices=("xposed", "root"), default="xposed")
+p.add_argument("--output-dir", type=Path)
 args = p.parse_args()
+args.module = args.module or ("0.1.1" if args.engine == "root" else "0.3.13")
+if args.engine == "root" and args.require_sensors:
+    p.error("Root mode does not include app-process sensor hooks")
 root = Path(__file__).resolve().parents[2]
-out = root / "build/reports/device" / (("root-" if args.engine == "root" else "compat-") + args.module.replace(".", "") + "-device") / "extended"
+out = args.output_dir or root / "build/reports/device" / (("root-" if args.engine == "root" else "compat-") + args.module.replace(".", "") + "-device") / "extended"
 out.mkdir(parents=True, exist_ok=True)
 adb = [args.adb, "-s", args.serial]
 flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)

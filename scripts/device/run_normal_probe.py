@@ -16,10 +16,12 @@ parser.add_argument("--engine", choices=("xposed", "root"), default="xposed")
 parser.add_argument("--serial", required=True)
 parser.add_argument("--adb", default="adb")
 parser.add_argument("--require-flush", action="store_true")
+parser.add_argument("--duration-seconds", type=int, default=60, choices=range(20, 181), metavar="20..180")
+parser.add_argument("--output-dir", type=Path, help="Keep this run separate from previous acceptance reports")
 options = parser.parse_args()
 if options.compatibility:
     options.format = "compatibility"
-reports = root / "build/reports/device" / (("root-" if options.engine == "root" else "compat-") + (options.module or "0.3.4").replace(".", "") + "-device") / "normal-app"
+reports = options.output_dir or root / "build/reports/device" / (("root-" if options.engine == "root" else "compat-") + (options.module or "0.3.4").replace(".", "") + "-device") / "normal-app"
 reports.mkdir(parents=True, exist_ok=True)
 adb = [options.adb, "-s", options.serial]
 flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -82,8 +84,8 @@ try:
         run("shell", "am", "force-stop", "com.mockgeo.probe")
         identity = uuid.uuid4().hex
         run("shell", "am", "start", "-n", "com.mockgeo.probe/." + activity, "--es", "runId", identity,
-            "--ez", "expectedMock", str(not compatibility).lower())
-        deadline = time.monotonic() + 30
+            "--ez", "expectedMock", str(not compatibility).lower(), "--ei", "durationMs", str(options.duration_seconds * 1000))
+        deadline = time.monotonic() + (options.duration_seconds + 15 if activity == "ProbeActivity" else 30)
         while time.monotonic() < deadline:
             fresh = state()
             if fresh["et"] != last_et:
@@ -95,6 +97,8 @@ try:
             except ValueError:
                 report = {}
             if report.get("runId") == identity and any(e["api"] == "complete" for e in report.get("events", [])):
+                if activity == "ProbeActivity" and report.get("durationMs") != options.duration_seconds * 1000:
+                    raise RuntimeError("Old probe APK cannot verify sustained delivery; install the matching new probe")
                 destination = out / filename
                 destination.write_text(json.dumps(report, indent=2), encoding="utf-8")
                 extra = ["--require-flush"] if options.require_flush and validator == "check_lifecycle_probe.py" else []

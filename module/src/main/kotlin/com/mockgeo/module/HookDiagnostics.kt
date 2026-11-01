@@ -11,8 +11,11 @@ internal object HookDiagnostics {
 
     /** PendingIntent 订阅的合成投递次数（与 pushes 分开统计，便于诊断）。 */
     val pendingPushes = AtomicLong()
+    val rewrittenCallbacks = AtomicLong()
+    val unmatchedCallbacks = AtomicLong()
 
     fun reset() {
         lastCalls.set(0); currentCalls.set(0); listenerCalls.set(0); pushes.set(0); pendingPushes.set(0)
+        rewrittenCallbacks.set(0); unmatchedCallbacks.set(0)
     }
 }

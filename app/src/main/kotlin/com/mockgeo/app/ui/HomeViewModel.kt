@@ -17,6 +17,9 @@ import com.mockgeo.app.geo.OsrmClient
 import com.mockgeo.app.geo.AmapGeoClient
 import com.mockgeo.app.geo.AmapKeyStore
 import com.mockgeo.app.BuildConfig
+import com.mockgeo.app.diagnostics.DiagnosticFiles
+import com.mockgeo.app.diagnostics.DiagnosticReport
+import com.mockgeo.app.diagnostics.SupportContact
 import com.mockgeo.app.sim.SimController
 import com.mockgeo.app.sim.SimulationService
 import com.mockgeo.core.data.prefs.AppSettings
@@ -61,6 +64,8 @@ class HomeViewModel(
     val checks: StateFlow<List<CheckResult>> = _checks
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message
+    private val _diagnosticBusy = MutableStateFlow(false)
+    val diagnosticBusy: StateFlow<Boolean> = _diagnosticBusy
     private val _routeDraft = MutableStateFlow<List<LatLng>>(emptyList())
     val routeDraft: StateFlow<List<LatLng>> = _routeDraft
     private val _routeControls = MutableStateFlow<List<LatLng>>(emptyList())
@@ -349,8 +354,15 @@ class HomeViewModel(
     fun consumeMessage() { _message.value = null }
     fun postMessage(msg: String) { _message.value = msg }
     fun diagnostics(): List<String> = buildList {
+        add("设备：${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE} / API ${android.os.Build.VERSION.SDK_INT}")
+        add("允许忽略电池优化：${appContext.getSystemService(android.os.PowerManager::class.java).isIgnoringBatteryOptimizations(appContext.packageName)}")
         router.moduleSnapshot()?.let { status ->
             add("系统服务 v${status.moduleVersion} · 状态=${if (status.enabled) "模拟中" else "待机"}")
+            if (status.hookDetail.isNotBlank()) {
+                add("系统钩子：${status.hookDetail}")
+                add("最近回执心跳剩余 ${status.leaseRemainingMs} ms · 本次系统进程心跳过期 ${status.leaseExpirations} 次")
+                add("回调改写 ${status.rewrittenCallbacks} 次 · 未匹配订阅的回调 ${status.unmatchedCallbacks} 次（含非模拟接收方，需结合探针判断）")
+            }
             add("运行模式：${if (status.reportMock) "普通模式" else "深度无痕模式（隐藏模拟标记）"}")
             add("定位响应统计：缓存定位 ${status.lastCalls} 次 · 实时定位 ${status.currentCalls} 次 · 连续导航 ${status.listenerCalls} 次 · 位置推送 ${status.pushes} 次")
         }
@@ -466,13 +478,75 @@ class HomeViewModel(
         val points = history.value.reversed().mapIndexed { i, p -> RoutePoint(seq = i, lat = p.lat, lng = p.lng) }
         return writeGeneratedFile(uri) { Gpx.export("历史位置", points) }
     }
-    fun exportDiagnostics(uri: Uri): String? = writeFile(uri, buildString {
-        appendLine("MockGeo ${com.mockgeo.app.BuildConfig.VERSION_NAME} · Android ${android.os.Build.VERSION.RELEASE}")
-        appendLine("引擎：${router.currentEngineId} / ${sim.value.engineState}")
-        appendLine("模式：${sim.value.mode} / 暂停：${sim.value.paused}")
-        checks.value.forEach { appendLine("${if (it.ok) "通过" else "未通过"} ${it.name}: ${it.message.orEmpty()}") }
-        diagnostics().forEach { appendLine(it) }
-    })
+    /** Used by both settings and runtime status; no settings/route serialization. */
+    fun diagnosticReportText(): String {
+        val ui = sim.value
+        val power = appContext.getSystemService(android.os.PowerManager::class.java)
+        val details = mutableListOf(
+            "应用版本" to "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+            "设备" to "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
+            "系统" to "Android ${android.os.Build.VERSION.RELEASE} / API ${android.os.Build.VERSION.SDK_INT}",
+            "系统构建" to android.os.Build.DISPLAY,
+            "CPU ABI" to android.os.Build.SUPPORTED_ABIS.joinToString(),
+            "运行引擎" to router.currentEngineId,
+            "引擎状态" to DiagnosticReport.stateLabel(ui.engineState),
+            "模拟模式" to ui.mode.name,
+            "暂停移动" to ui.paused.toString(),
+            "标准电池优化豁免" to power.isIgnoringBatteryOptimizations(appContext.packageName).toString(),
+            "系统省电模式" to power.isPowerSaveMode.toString(),
+            "设备空闲模式" to power.isDeviceIdleMode.toString(),
+            "厂商省电策略" to "需在应用省电设置中确认；标准电池豁免不代表厂商已设为不受限制",
+            "已安装模块版本" to runCatching { appContext.packageManager.getPackageInfo("com.mockgeo.module", 0).versionName.orEmpty() }.getOrDefault("未安装"),
+        )
+        (ui.engineState as? EngineState.Failed)?.detail?.let { details += "失败详情" to it }
+        val now = System.currentTimeMillis()
+        router.moduleSnapshot()?.let { status ->
+            details += listOf(
+                "系统后端" to status.backend,
+                "系统载荷版本" to status.moduleVersion,
+                "系统进程" to status.processId.toString(),
+                "回执仍新鲜" to status.isFresh(now).toString(),
+                "回执年龄 ms" to (now - status.updatedAt).toString(),
+                "系统模拟启用" to status.enabled.toString(),
+                "关键钩子就绪" to status.hooksInstalled.toString(),
+                "钩子详情" to status.hookDetail,
+                "心跳剩余 ms（回执时）" to status.leaseRemainingMs.toString(),
+                "心跳过期次数" to status.leaseExpirations.toString(),
+                "模拟标记" to status.reportMock.toString(),
+                "定位计数" to "last=${status.lastCalls}, current=${status.currentCalls}, subscriptions=${status.listenerCalls}, pushes=${status.pushes}",
+                "回调计数" to "rewritten=${status.rewrittenCallbacks}, unmatched=${status.unmatchedCallbacks}",
+            )
+        } ?: run { details += "系统回执" to "当前进程尚未读取到回执" }
+        return DiagnosticReport.render(details, checks.value, controller.recentLogs(),
+            listOf(BuildConfig.AMAP_API_KEY, AmapKeyStore.getCustomApiKey(appContext)))
+    }
+
+    private fun diagnosticAction(action: suspend (String) -> Unit) {
+        if (_diagnosticBusy.value) return
+        _diagnosticBusy.value = true
+        work {
+            try { action(withContext(Dispatchers.IO) { diagnosticReportText() }) }
+            finally { _diagnosticBusy.value = false }
+        }
+    }
+
+    fun exportDiagnostics(uri: Uri): String? {
+        diagnosticAction { report ->
+            withContext(Dispatchers.IO) {
+                appContext.contentResolver.openOutputStream(uri, "wt")?.bufferedWriter(Charsets.UTF_8)
+                    ?.use { it.write(report) } ?: error("无法写入所选文件")
+            }
+            postMessage("诊断日志已保存，可作为邮件附件发送")
+        }
+        return null
+    }
+
+    fun sendDiagnosticFeedback() = diagnosticAction { report ->
+        val uri = withContext(Dispatchers.IO) { DiagnosticFiles.create(appContext, report) }
+        val chooser = SupportContact.attachmentChooser(appContext, uri)
+            ?: error("未找到可发送附件的邮件应用。请先保存日志，再发送至 ${SupportContact.EMAIL}")
+        appContext.startActivity(chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
     fun exportSettings(uri: Uri): String? = writeFile(uri, settingsRepo.exportJson(settings.value))
     fun importSettings(uri: Uri): String? {
         work("设置已恢复") {

@@ -28,9 +28,10 @@ class StatusActivity : Activity() {
                 模块已安装（v${StatusWriter.MODULE_VERSION}）。
 
                 启用步骤：
+                需使用支持 libxposed API 102 的 LSPosed 框架。
                 1. 在 LSPosed 中启用本模块；
-                2. 作用域勾选「system」（system_server）；
-                3. 重启（或软重启）使 hook 生效；
+                2. 作用域勾选「系统框架」（system_server）；
+                3. 手动重启手机使 hook 生效；
                 4. 打开 MockGeo 主应用，引擎选择「LSPosed 模块」。
 
                 说明：

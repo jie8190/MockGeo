@@ -67,6 +67,10 @@ class DeviceSmokeInstrumentation : Instrumentation() {
 
     override fun onStart() {
         super.onStart()
+        if (mode == "support") {
+            SupportSmokeChecks(this).run()
+            return
+        }
         if (mode == "data") {
             DataSmokeChecks(this).run()
             return

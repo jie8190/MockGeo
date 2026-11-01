@@ -27,6 +27,11 @@ class StatusProvider : ContentProvider() {
         ControlPlane.COL_LAT,
         ControlPlane.COL_LNG,
         ControlPlane.COL_HOOKS,
+        ControlPlane.COL_HOOK_DETAIL,
+        ControlPlane.COL_LEASE_REMAINING_MS,
+        ControlPlane.COL_LEASE_EXPIRATIONS,
+        ControlPlane.COL_REWRITTEN_CALLBACKS,
+        ControlPlane.COL_UNMATCHED_CALLBACKS,
         ControlPlane.COL_UPTIME_MS,
         ControlPlane.COL_UPDATED_AT,
         ControlPlane.COL_MODULE_VERSION,
@@ -64,6 +69,9 @@ class StatusProvider : ContentProvider() {
                     ControlPlane.COL_LAT -> data.getAsDouble(ControlPlane.COL_LAT) ?: 0.0
                     ControlPlane.COL_LNG -> data.getAsDouble(ControlPlane.COL_LNG) ?: 0.0
                     ControlPlane.COL_HOOKS -> if (data.getAsBoolean(ControlPlane.COL_HOOKS) == true) 1 else 0
+                    ControlPlane.COL_HOOK_DETAIL -> data.getAsString(col) ?: ""
+                    ControlPlane.COL_LEASE_REMAINING_MS, ControlPlane.COL_LEASE_EXPIRATIONS,
+                    ControlPlane.COL_REWRITTEN_CALLBACKS, ControlPlane.COL_UNMATCHED_CALLBACKS -> data.getAsLong(col) ?: 0L
                     ControlPlane.COL_REPORT_MOCK -> if (data.getAsBoolean(ControlPlane.COL_REPORT_MOCK) != false) 1 else 0
                     ControlPlane.COL_PROCESS_ID -> data.getAsInteger(ControlPlane.COL_PROCESS_ID) ?: 0
                     ControlPlane.COL_BACKEND, ControlPlane.COL_INSTANCE_NONCE, ControlPlane.COL_RESPONSE_NONCE -> data.getAsString(col) ?: ""

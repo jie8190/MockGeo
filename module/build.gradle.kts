@@ -11,8 +11,8 @@ android {
         applicationId = "com.mockgeo.module"
         minSdk = 26
         targetSdk = 36
-        versionCode = 15
-        versionName = "0.3.12"
+        versionCode = 16
+        versionName = "0.3.13"
     }
 
     compileOptions {

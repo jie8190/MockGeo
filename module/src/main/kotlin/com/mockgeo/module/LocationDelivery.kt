@@ -83,7 +83,10 @@ internal object LocationDelivery {
     fun outgoing(receiver: Any?, args: Array<Any?>, forward: (Array<Any?>) -> Any?): Any? {
         val key = receiver?.let(Ipc::binder) ?: return forward(args)
         val provider = locations(args.firstOrNull()).firstOrNull()?.provider
-        val subscription = recipients.find(key, provider) ?: return forward(args)
+        val subscription = recipients.find(key, provider) ?: run {
+            if (ModuleConfig.snapshot().enabled) HookDiagnostics.unmatchedCallbacks.incrementAndGet()
+            return forward(args)
+        }
         if (delivering.get()?.contains(key) != true && directProxyCalls.incrementAndGet() == 1) {
             ModuleLog.d("recipient registry handled a reconstructed Binder callback")
         }
@@ -105,7 +108,10 @@ internal object LocationDelivery {
                 is Location -> old
                 else -> result(fixes.take(accepted)) ?: old
             }
-            config(subscription.uid)?.let { next[0] = rewrite(next[0], subscription.provider, it) }
+            config(subscription.uid)?.let {
+                next[0] = rewrite(next[0], subscription.provider, it)
+                HookDiagnostics.rewrittenCallbacks.incrementAndGet()
+            }
             return forward(next)
         } finally { active.remove(key) }
     }
