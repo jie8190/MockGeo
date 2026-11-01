@@ -22,8 +22,8 @@ android {
         applicationId = "com.mockgeo.rootpayload"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 3
+        versionName = "0.1.2"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -31,7 +31,7 @@ android {
     }
     sourceSets.named("main") {
         java.srcDir(rootProject.file("module/src/main/kotlin"))
-        java.exclude("**/MockGeoModule.kt", "**/StatusActivity.kt")
+        java.exclude("**/MockGeoModule.kt", "**/SystemHookBootstrap.kt", "**/StatusActivity.kt")
         jniLibs.srcDir(nativeOutput.map { it.dir("jni") })
     }
     buildFeatures { buildConfig = true }

@@ -11,7 +11,8 @@ process/version/nonce checks keep LSPosed receipts from satisfying Root startup.
 
 The first implementation targets ARM64. Do not inject alongside an existing
 LSPosed ART runtime. Payload 0.1.0 passed system acceptance on Xiaomi 15 / Android 16 / KernelSU with LSPosed absent.
-The current payload 0.1.1 updates the shared hook layer; a separate pure-Root device rerun is still pending.
+The published payload 0.1.1 updates the shared hook layer; a separate pure-Root device rerun is still pending.
+The local 0.4.6 candidate embeds payload 0.1.2 with shared diagnostic logging changes. It does not change the native injection flow and has not had independent pure-Root device verification.
 Other ROMs and app-process sensor hooks are outside the verified scope.
 
 ## Build
@@ -59,7 +60,7 @@ Dobby is pinned to its complete Android implementation at `9c85e74f`.
 
 ## Current verification
 
-Current distribution: main app 0.4.5 / Root payload 0.1.1. Shared hooks were tested through
+Published distribution: main app 0.4.5 / Root payload 0.1.1. Shared hooks were tested through
 LSPosed module 0.3.13 on the Android 16 device; this does not replace independent Root 0.1.1 verification.
 See [the compatibility report](../docs/VERIFICATION_0.4.4.md). The following is historical 0.1.0 evidence.
 

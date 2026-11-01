@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 定位图钉 + 信号弧（自绘，不拷贝原厂资产）；内容位于 66dp 安全区内 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 落点光圈 -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#73FFFFFF"
+        android:strokeWidth="2.5"
+        android:pathData="M41,74a13,4.5 0,1 0,26 0a13,4.5 0,1 0,-26 0z" />
+    <!-- 信号弧 -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#E6FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M64.9,30.4A19,19 0,0 1,72.7 42.7" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#80FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M68.3,25.5A25,25 0,0 1,78.6 41.7" />
+    <!-- 图钉 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,74C49,68.5 40,58 40,46a14,14 0,0 1,28 0c0,12 -9,22.5 -14,28z" />
+    <path
+        android:fillColor="#FF4C8DFF"
+        android:pathData="M48.5,46a5.5,5.5 0,1 0,11 0a5.5,5.5 0,1 0,-11 0z" />
+</vector>

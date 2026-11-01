@@ -56,6 +56,11 @@ class XposedEngine(
 
     private var watchdog: Job? = null
     private val publishMutex = Mutex()
+    private val probeMutex = Mutex()
+    private val probe = ControlChannelProbe(clock, expectedBackend, log, send = { nonce ->
+        val extras = Bundle().apply { putString(ControlPlane.KEY_REQUEST_NONCE, nonce) }
+        checkNotNull(lm) { "LocationManager unavailable" }.sendExtraCommand(controlProvider, ControlPlane.CMD_PING, extras)
+    }, read = { queryStatus() })
 
     override fun state(): StateFlow<EngineState> = _state
 
@@ -69,8 +74,9 @@ class XposedEngine(
     )
 
     override suspend fun selfCheck(): List<CheckResult> {
-        val reachable = pingModule()
-        val status = readStatus()
+        val checked = checkChannel()
+        val reachable = checked.reachable
+        val status = checked.status
         val installedVersion = runCatching {
             context.packageManager.getPackageInfo("com.mockgeo.module", 0).versionName
         }.getOrNull()
@@ -80,7 +86,7 @@ class XposedEngine(
             CheckResult(
                 name = "系统控制通道",
                 ok = reachable,
-                message = if (reachable) null else "未收到模块回执。需支持 libxposed API 102 的 LSPosed、启用模块并勾选系统框架，安装更新后手动重启",
+                message = if (reachable) null else checked.detail,
                 actionKey = "NONE",
             ),
             CheckResult("系统定位钩子", reachable && status?.hooksInstalled == true,
@@ -153,30 +159,23 @@ class XposedEngine(
 
     /**
      * PING：模块是否接管了控制面。
-     * 判定：sendExtraCommand 不抛（未知 provider 会抛 IllegalArgumentException），
-     * 且状态 provider 数据新鲜（模块活着且写过状态）。
+     * 判定：命令完成且收到本次检查之后的新鲜状态；短暂等待异步回执，
+     * 将命令/读取异常及超时阶段记录到应用诊断，不能把缺少回执等同于未勾选模块。
      */
-    override suspend fun pingModule(): Boolean {
-        val requestedAt = clock.currentTimeMillis()
-        val nonce = java.util.UUID.randomUUID().toString().replace("-", "")
-        val cmdOk = runCatching {
-            val extras = Bundle().apply { putString(ControlPlane.KEY_REQUEST_NONCE, nonce) }
-            checkNotNull(lm).sendExtraCommand(controlProvider, ControlPlane.CMD_PING, extras)
-            // inout 时还能拿到 pong；仅作加分项，不作必要条件
-            extras.containsKey(ControlPlane.KEY_PONG)
-        }.isSuccess
-        if (!cmdOk) return false
-        // 命令没抛异常 ≠ 模块在：用状态新鲜度二次确认
-        val st = readStatus()
-        return st != null && st.updatedAt >= requestedAt && st.isFresh(clock.currentTimeMillis()) &&
-            (expectedBackend != "root" || st.responseNonce == nonce)
+    override suspend fun pingModule(): Boolean = checkChannel().reachable
+
+    private suspend fun checkChannel(): ControlChannelProbe.Result = probeMutex.withLock {
+        probe.check()
     }
 
     override fun statusSnapshot(): ModuleStatus? = readStatus()
 
     /** 读模块状态（App 自己的 provider，本地读）。 */
-    internal fun readStatus(): ModuleStatus? = runCatching {
-        context.contentResolver.query(
+    internal fun readStatus(): ModuleStatus? = runCatching { queryStatus() }
+        .onFailure { log.log(0, SimLogger.WARN, TAG, "status query failed backend=$expectedBackend", it) }
+        .getOrNull()?.takeIf { it.backend == expectedBackend || (expectedBackend == "xposed" && it.backend.isBlank()) }
+
+    private fun queryStatus(): ModuleStatus? = context.contentResolver.query(
             statusUri,
             null,
             null,
@@ -210,7 +209,6 @@ class XposedEngine(
                 responseNonce = idx(ControlPlane.COL_RESPONSE_NONCE).let { if (it < 0) "" else c.getString(it).orEmpty() },
             )
         }
-    }.getOrNull()?.takeIf { it.backend == expectedBackend || (expectedBackend == "xposed" && it.backend.isBlank()) }
 
     /**
      * 发布配置 + 开关。带重试与回执校验。

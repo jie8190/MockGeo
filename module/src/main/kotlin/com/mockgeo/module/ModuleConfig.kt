@@ -168,9 +168,17 @@ class ModuleConfig private constructor(
     }
 }
 
-/** 模块日志：logcat + LSPosed 日志双写。 */
+/** Startup messages and failures also reach LSPosed; per-frame debug stays in logcat. */
 object ModuleLog {
     private const val TAG = "MockGeoModule"
+    @Volatile private var framework: ((Int, String, Throwable?) -> Unit)? = null
+
+    fun bindFramework(sink: ((Int, String, Throwable?) -> Unit)?) { framework = sink }
+
+    fun i(msg: String) {
+        android.util.Log.i(TAG, msg)
+        runCatching { framework?.invoke(android.util.Log.INFO, msg, null) }
+    }
 
     fun d(msg: String) {
         android.util.Log.d(TAG, msg)
@@ -178,9 +186,11 @@ object ModuleLog {
 
     fun w(msg: String, t: Throwable? = null) {
         android.util.Log.w(TAG, msg, t)
+        runCatching { framework?.invoke(android.util.Log.WARN, msg, t) }
     }
 
     fun e(msg: String, t: Throwable? = null) {
         android.util.Log.e(TAG, msg, t)
+        runCatching { framework?.invoke(android.util.Log.ERROR, msg, t) }
     }
 }

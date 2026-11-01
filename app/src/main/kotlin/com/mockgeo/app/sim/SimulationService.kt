@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import com.mockgeo.app.MainActivity
+import com.mockgeo.app.R
 import com.mockgeo.app.overlay.JoystickOverlayService
 import com.mockgeo.core.model.*
 import kotlinx.coroutines.*
@@ -161,7 +162,7 @@ class SimulationService : Service() {
     private fun action(value: String, code: Int) = PendingIntent.getService(this, code,
         Intent(this, SimulationService::class.java).setAction(value), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     private fun base(title: String, text: String): Notification.Builder = Notification.Builder(this, CHANNEL_ID)
-        .setSmallIcon(android.R.drawable.ic_menu_mylocation).setContentTitle(title).setContentText(text)
+        .setSmallIcon(R.drawable.ic_stat_mockgeo).setContentTitle(title).setContentText(text)
         .setContentIntent(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)).setOnlyAlertOnce(true).setOngoing(true)
     private fun buildNotification(ui: SimController.SimUiState): Notification {

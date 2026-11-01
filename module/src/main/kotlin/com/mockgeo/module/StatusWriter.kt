@@ -26,7 +26,10 @@ object StatusWriter {
     fun write(cfg: ModuleConfig) {
         val identity = Binder.clearCallingIdentity()
         try {
-            val ctx = obtainSystemContext() ?: return
+            val ctx = obtainSystemContext() ?: run {
+                ModuleLog.w("status write skipped: system context unavailable")
+                return
+            }
             val values = ContentValues().apply {
                 put(ControlPlane.COL_ENABLED, cfg.enabled)
                 put(ControlPlane.COL_REVISION, cfg.revision)
@@ -52,10 +55,12 @@ object StatusWriter {
                 put(ControlPlane.COL_REPORT_MOCK, cfg.reportMock)
             }
             // insert = upsert 语义由 App 侧 provider 实现（replace）
-            ctx.contentResolver.insert(statusUri, values)
+            if (ctx.contentResolver.insert(statusUri, values) == null) {
+                ModuleLog.w("status write rejected by application provider")
+            }
         } catch (t: Throwable) {
             // App 未安装 / provider 不可用：回执通道降级（Bundle 回写仍在），不致命
-            ModuleLog.d("status write skipped: ${t.message}")
+            ModuleLog.w("status write failed", t)
         } finally {
             // Receipt failure must not prevent STOP reaching the client mirror.
             publishScopeState(cfg)
@@ -136,5 +141,5 @@ object StatusWriter {
         }
     }
 
-    const val MODULE_VERSION = "0.3.13"
+    const val MODULE_VERSION = "0.3.14"
 }

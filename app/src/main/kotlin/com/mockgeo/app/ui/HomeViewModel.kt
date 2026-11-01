@@ -484,6 +484,14 @@ class HomeViewModel(
         val power = appContext.getSystemService(android.os.PowerManager::class.java)
         val details = mutableListOf(
             "应用版本" to "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+            "应用包名" to appContext.packageName,
+            "应用用户空间" to (android.os.Process.myUid() / 100_000).toString(),
+            "模拟位置候选声明" to runCatching {
+                val permissions = appContext.packageManager.getPackageInfo(appContext.packageName,
+                    android.content.pm.PackageManager.GET_PERMISSIONS).requestedPermissions.orEmpty()
+                if ("android.permission.ACCESS_MOCK_LOCATION" in permissions) "已声明（系统选择列表仍由 ROM 决定）"
+                else "缺失，当前安装包不会被标准选择器列出"
+            }.getOrElse { "读取失败：${it.javaClass.simpleName}" },
             "设备" to "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
             "系统" to "Android ${android.os.Build.VERSION.RELEASE} / API ${android.os.Build.VERSION.SDK_INT}",
             "系统构建" to android.os.Build.DISPLAY,

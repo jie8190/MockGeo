@@ -27,6 +27,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import com.mockgeo.app.MainActivity
+import com.mockgeo.app.R
 import com.mockgeo.app.sim.SimController
 import com.mockgeo.app.sim.SimulationService
 import com.mockgeo.core.model.EngineState
@@ -329,7 +330,7 @@ class JoystickOverlayService : Service() {
             Intent(this, JoystickOverlayService::class.java).setAction(ACTION_CLOSE), flags)
         val openIntent = PendingIntent.getActivity(this, 104, Intent(this, MainActivity::class.java), flags)
         return Notification.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_compass)
+            .setSmallIcon(R.drawable.ic_stat_mockgeo)
             .setContentTitle("悬浮控制已开启")
             .setContentText("拖动标题可移动，× 仅关闭面板")
             .setContentIntent(openIntent)
