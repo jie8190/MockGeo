@@ -35,6 +35,6 @@ FileProvider 不对外导出，唯一根目录为应用缓存下 `diagnostics/`�
 
 ## v0.4.5 发行附件
 
-公开发行使用上述已安装验收的主包，不重新混入个人高德 Key。配套模块为已验证的 0.3.13，独立探针为 1.2，自动化测试包为 0.4.5。四个 APK 的签名均与旧版一致；Root 0.1.1 内置组件的哈希清单一致；源码及递归 APK 检查不含本机私人 Key。
+公开发行使用上述已安装验收的主包和配套模块 0.3.13，不重新混入个人高德 Key。两者的签名均与旧版一致；Root 0.1.1 内置组件的哈希清单一致；源码及递归 APK 检查不含本机私人 Key。独立探针及 instrumentation 是开发验收工具，不作为面向用户的 Release 附件。
 
-发行目录 `releases/github-v0.4.5/` 包含四个 APK 和统一 `SHA256SUMS.txt`。实际验证记录保存在工作区 `_tools/release-045-validation.json`；JVM/debug 各模块回归合计 178 项，不把旧 release 测试目录重复计入。GitHub Release 列出升级方式与尚未验证的 ROM/Root 范围。
+发行目录 `releases/github-v0.4.5/` 仅包含主应用、LSPosed 模块两个 APK 和对应 `SHA256SUMS.txt`。原始验收记录保存在工作区 `_tools/release-045-validation.json`，发行附件调整后的核对记录见 `_tools/release-045-user-assets.json`；JVM/debug 各模块回归合计 178 项，不把旧 release 测试目录重复计入。GitHub Release 列出升级方式与尚未验证的 ROM/Root 范围。

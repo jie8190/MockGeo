@@ -53,9 +53,7 @@ LSPosed 模式提供下列可配置的模拟输出。系统接口验收不代表
 | :--- | :--- | :--- |
 | **`MockGeo-v0.4.5-app.apk`** | `com.mockgeo.app` | 主应用；Root 载荷已内置 |
 | **`MockGeo-v0.3.13-module.apk`** | `com.mockgeo.module` | 仅 LSPosed 模式需要；完整安装后手动重启 |
-| `MockGeo-probe-v1.2.apk` | `com.mockgeo.probe` | 可选：独立定位检查，供测试使用 |
-| `MockGeo-v0.4.5-androidTest.apk` | `com.mockgeo.app.test` | 可选：配合仓库自动化验收脚本使用，无桌面入口 |
-| `SHA256SUMS.txt` | — | 四个 APK 的 SHA-256 校验值 |
+| `SHA256SUMS.txt` | — | 主应用和 LSPosed 模块的 SHA-256 校验值 |
 
 从正式版 0.4.3 升级时，LSP 用户需同步更新模块 0.3.13；Root 用户若已加载旧载荷，需手动重启后再启动新载荷。已加载内部版模块 0.3.13 / Root 0.1.1 的用户，只更新主包即可。保持原签名覆盖安装，无需卸载应用。
 
