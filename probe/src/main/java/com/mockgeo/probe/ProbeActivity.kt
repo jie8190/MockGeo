@@ -37,6 +37,9 @@ class ProbeActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (intent.getBooleanExtra("keepScreenOn", false)) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
         // Explicit test-only opt-in: show this fixture over keyguard without dismissing it.
         // The device remains secured; no other application's UI is exposed.
         if (intent.getBooleanExtra("showWhenLocked", false)) {
@@ -145,6 +148,9 @@ class ProbeActivity : Activity() {
             value.put("result", "fix").put("matchesExpected", distance[0] < 25f)
                 .put("isMock", if (provider == "webview") JSONObject.NULL else isMock)
                 .put("reportedProvider", location.provider).put("accuracy", location.accuracy.toDouble())
+                .put("sourceElapsedMs", if (provider == "webview") JSONObject.NULL else location.elapsedRealtimeNanos / 1_000_000)
+                .put("sourceAgeMs", if (provider == "webview") JSONObject.NULL else
+                    (SystemClock.elapsedRealtimeNanos() - location.elapsedRealtimeNanos) / 1_000_000)
         }
         record(provider, api, value)
     }

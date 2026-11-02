@@ -18,7 +18,7 @@
 
 ### 1. 运行模式
 - **LSPosed 模式 (`xposed`)**：需要支持 `libxposed API 102` 的框架，注入 `system_server`，在系统定位服务出口直接合成并分发位置，无需污染系统底层 Provider 缓存，**停止模拟后无需重启即可立即恢复真实物理位置**。
-- **Root 直连 (`root`，实验)**：主应用内置 ARM64 加载器和系统定位载荷，通过 Root 加载并校验独立的系统进程回执，无需另装 MockGeo 模块 APK。Root **0.1.0** 已在 Xiaomi 15 / Android 16 / KernelSU 上完成隔离进程及真实系统定位验收；本版 **0.1.2** 更新了共用钩子与诊断代码，尚未单独完成纯 Root 真机复测。当前拒绝与驻留的 LSPosed ART 框架叠加运行，需要先停用 LSPosed 注入并手动重启，或继续使用 LSPosed 模式。Root 路径暂不覆盖应用进程内传感器/SDK 缓存钩子。
+- **Root 直连 (`root`，实验)**：主应用内置 ARM64 加载器和系统定位载荷，通过 Root 加载并校验独立的系统进程回执，无需另装 MockGeo 模块 APK。Root **0.1.0** 已在 Xiaomi 15 / Android 16 / KernelSU 上完成真实系统定位验收；本版 **0.1.3** 的独立进程加载与 8 项钩子检查通过，尚未单独完成纯 Root 接管系统服务的复测。当前拒绝与驻留的 LSPosed ART 框架叠加运行，需要先停用 LSPosed 注入并手动重启，或继续使用 LSPosed 模式。Root 路径暂不覆盖应用进程内传感器/SDK 缓存钩子。
 - **标准模式 (`provider`)**：无需 Root，通过 Android 系统「开发者选项 → 模拟位置信息应用」运行。
 
 ### 2. 深度无痕与多维环境证据链同步
@@ -45,13 +45,13 @@ LSPosed 模式提供下列可配置的模拟输出。系统接口验收不代表
 
 ## 📦 下载与安装
 
-当前版本：主应用 **0.4.6** · 内置 Root 载荷 **0.1.2** · 可选 LSPosed 模块 **0.3.14**。
+当前版本：主应用 **0.4.7（通用包 39.14 MB）** · 内置 Root 载荷 **0.1.3** · 可选 LSPosed 模块 **0.3.14**。
 
-[下载 v0.4.6](https://github.com/jie8190/MockGeo/releases/tag/v0.4.6) · [更新日志](CHANGELOG.md) · [0.4.6 核验](docs/VERIFICATION_0.4.6.md) · [诊断验证](docs/VERIFICATION_0.4.5.md) · [定位与后台验证](docs/VERIFICATION_0.4.4.md)
+[下载 v0.4.7](https://github.com/jie8190/MockGeo/releases/tag/v0.4.7) · [更新日志](CHANGELOG.md) · [0.4.7 核验与未完成项](docs/VERIFICATION_0.4.7.md) · [诊断验证](docs/VERIFICATION_0.4.5.md) · [定位与后台验证](docs/VERIFICATION_0.4.4.md)
 
 | 安装包文件 | 包名 | 说明 |
 | :--- | :--- | :--- |
-| **`MockGeo-v0.4.6-app.apk`** | `com.mockgeo.app` | 主应用；Root 载荷已内置 |
+| **`MockGeo-v0.4.7-app.apk`** | `com.mockgeo.app` | 通用 ARM 32/64 位主应用；Root 载荷已内置 |
 | **`MockGeo-v0.3.14-module.apk`** | `com.mockgeo.module` | 仅 LSPosed 模式需要；完整安装后手动重启 |
 | `SHA256SUMS.txt` | — | 主应用和 LSPosed 模块的 SHA-256 校验值 |
 
@@ -121,12 +121,18 @@ MockGeo/
 
 ### 编译命令
 ```bash
-# 构建公开安装包，忽略本机环境与文件中的个人高德 Key
-./gradlew :app:assembleDebug :module:assembleDebug -PpublicBuild=true
+# 构建经过裁剪的公开主包，忽略本机环境与文件中的个人高德 Key
+./gradlew :app:assembleRelease -PpublicBuild=true
+# 可选：仅面向 ARM64，下载体积更小
+./gradlew :app:assembleRelease -PpublicBuild=true -PappAbis=arm64-v8a
+# 系统模块保持原有可读类名；不对钩子进行深度混淆
+./gradlew :module:assembleDebug
 
 # 运行全模块单元测试
 ./gradlew :core:model:test :core:route:test :core:data:testDebugUnitTest :core:engine:testDebugUnitTest :module:testDebugUnitTest
 ```
+
+正式发行使用通用包；ARM64 专用包可按上述命令自行构建。构建与校验细节见 [APK 体积优化](docs/APK_SIZE.md)。
 
 > **可选**：若希望仅在个人本地构建中内置高德 Key，可省略 `-PpublicBuild=true`，再复制 [secrets.properties.example](secrets.properties.example) 为 `secrets.properties`（已被 [.gitignore](.gitignore) 排除，不会提交到 Git）：
 > ```properties

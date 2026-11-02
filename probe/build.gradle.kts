@@ -6,11 +6,12 @@ android {
     namespace = "com.mockgeo.probe"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.mockgeo.probe"
+        // A separate package can isolate client-scope hooks during public API checks.
+        applicationId = providers.gradleProperty("probeAppId").getOrElse("com.mockgeo.probe")
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

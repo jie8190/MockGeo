@@ -12,16 +12,23 @@ val privateProperties = Properties().apply {
 }
 // Publishing must never inherit a developer's personal map key from the environment or disk.
 val publicBuild = providers.gradleProperty("publicBuild").map { it.toBooleanStrict() }.getOrElse(false)
+// The default APK retains both ARM phone architectures. A smaller arm64-only APK
+// can be built with -PappAbis=arm64-v8a without changing application behavior.
+val appAbis = providers.gradleProperty("appAbis").getOrElse("arm64-v8a,armeabi-v7a")
+    .split(',').map(String::trim).filter(String::isNotEmpty).distinct()
+require(appAbis.isNotEmpty() && appAbis.all { it in setOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86") }) {
+    "Unsupported appAbis"
+}
 val amapApiKey = if (publicBuild) "" else providers.environmentVariable("AMAP_API_KEY").orNull
     ?: privateProperties.getProperty("amap.apiKey", "")
 require(amapApiKey.isEmpty() || amapApiKey.matches(Regex("[A-Za-z0-9]+"))) { "Invalid AMap API key format" }
 
 val rootAssets = layout.buildDirectory.dir("generated/rootAssets")
-val rootPayload = rootProject.layout.projectDirectory.file("rootpayload/build/outputs/apk/debug/rootpayload-debug.apk")
-val rootLibrary = rootProject.layout.projectDirectory.file("rootpayload/build/root-native/jni/arm64-v8a/libmockgeo_root.so")
-val rootLoader = rootProject.layout.projectDirectory.file("rootpayload/build/root-native/tools/mockgeo_loader")
+val rootPayload = rootProject.layout.projectDirectory.file("rootpayload/build/outputs/apk/release/rootpayload-release.apk")
+val rootLibrary = rootProject.layout.projectDirectory.file("rootpayload/build/root-native/stripped/libmockgeo_root.so")
+val rootLoader = rootProject.layout.projectDirectory.file("rootpayload/build/root-native/stripped/mockgeo_loader")
 val packageRootAssets by tasks.registering {
-    dependsOn(":rootpayload:assembleDebug")
+    dependsOn(":rootpayload:assembleRelease")
     inputs.files(rootPayload, rootLibrary, rootLoader)
     val licenses = rootProject.fileTree("rootpayload/src/main/cpp/vendor") {
         include("**/LICENSE", "**/LICENSE.txt", "**/LICENSE.md", "SOURCES.json")
@@ -32,7 +39,7 @@ val packageRootAssets by tasks.registering {
         val output = rootAssets.get().dir("root").asFile.apply { mkdirs() }
         val artifacts = listOf("payload.apk" to rootPayload.asFile, "libmockgeo_root.so" to rootLibrary.asFile,
             "loader" to rootLoader.asFile)
-        val properties = Properties().apply { setProperty("version", "0.1.2") }
+        val properties = Properties().apply { setProperty("version", "0.1.3") }
         for ((name, source) in artifacts) {
             source.copyTo(output.resolve(name), overwrite = true)
             val digest = MessageDigest.getInstance("SHA-256").digest(source.readBytes())
@@ -57,8 +64,9 @@ android {
         applicationId = "com.mockgeo.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.4.6"
+        versionCode = 11
+        versionName = "0.4.7"
+        ndk { abiFilters += appAbis }
         buildConfigField("String", "AMAP_API_KEY", "\"$amapApiKey\"")
         manifestPlaceholders["AMAP_API_KEY"] = amapApiKey
         testInstrumentationRunner = "com.mockgeo.app.DeviceSmokeInstrumentation"
@@ -66,7 +74,12 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false // 首版保持可读性；发布版再开 R8
+            isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Preserve the certificate of existing installed versions.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
@@ -81,6 +94,8 @@ android {
     }
 
     packaging {
+        // Standalone downloads: compress .so files and let Android extract them on install.
+        jniLibs.useLegacyPackaging = true
         resources.excludes += "META-INF/{AL2.0,LGPL2.1}"
     }
 }
@@ -117,6 +132,8 @@ dependencies {
 
     implementation(libs.osmdroid)
     implementation("com.amap.api:3dmap-location-search:11.3.100_loc11.3.101_sea9.8.1")
+    // AMap's bundled APS encoder calls FastMath.min/max but omits the dependency.
+    implementation("net.jafama:jafama:2.3.2")
 
     implementation(libs.koin.android)
     implementation(libs.koin.compose)

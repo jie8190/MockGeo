@@ -1,22 +1,43 @@
 """Cross-process ARM64 loader/ART test. Targets only our disposable app_process VM."""
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import shlex
 import subprocess
 import time
 import uuid
+from zipfile import ZipFile
 
+project = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser()
 parser.add_argument("--adb", default="adb")
 parser.add_argument("--serial", required=True)
+parser.add_argument("--app-apk", type=Path, default=project / "app/build/outputs/apk/release/app-release.apk",
+                    help="Test the exact Root payload shipped in this main APK")
 args = parser.parse_args()
-project = Path(__file__).resolve().parent.parent
 nonce = uuid.uuid4().hex
 remote = "/data/local/tmp/mockgeo-root-probe-" + nonce
 output = project / "build/reports/root-probe" / nonce
 output.mkdir(parents=True, exist_ok=True)
 adb = [args.adb, "-s", args.serial]
+
+# Validate and extract known entries before touching a connected device. Testing
+# an unrelated unstripped build cannot verify the distributed APK.
+artifacts = {}
+artifact_directory = output / "artifacts"
+artifact_directory.mkdir()
+with ZipFile(args.app_apk) as apk:
+    properties = dict(line.split('=', 1) for line in apk.read('assets/root/manifest.properties').decode().splitlines()
+                      if line and not line.startswith('#'))
+    for name in ('payload.apk', 'libmockgeo_root.so', 'loader'):
+        content = apk.read('assets/root/' + name)
+        assert hashlib.sha256(content).hexdigest() == properties[name], 'Packaged Root hash mismatch'
+        artifacts[name] = artifact_directory / name
+        artifacts[name].write_bytes(content)
+(output / 'artifact-source.json').write_text(json.dumps(dict(
+    apk=str(args.app_apk.resolve()), sha256=hashlib.sha256(args.app_apk.read_bytes()).hexdigest(),
+    rootVersion=properties['version']), indent=2), encoding='utf-8')
 
 
 def run(*parts, check=True, timeout=20):
@@ -35,11 +56,6 @@ system_pid = run("shell", "pidof", "system_server").strip()
 host_pid = None
 try:
     run("shell", "mkdir", "-p", remote)
-    artifacts = {
-        "payload.apk": project / "rootpayload/build/outputs/apk/debug/rootpayload-debug.apk",
-        "libmockgeo_root.so": project / "rootpayload/build/root-native/jni/arm64-v8a/libmockgeo_root.so",
-        "loader": project / "rootpayload/build/root-native/tools/mockgeo_loader",
-    }
     for name, local in artifacts.items():
         run("push", str(local), remote + "/" + name)
     root(f"chown root:root {remote} {remote}/*; chmod 755 {remote}; chmod 555 {remote}/loader; chmod 444 {remote}/payload.apk {remote}/libmockgeo_root.so")
@@ -70,6 +86,7 @@ try:
     (output / "receipt.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     assert report.get("ready") is True and report.get("mode") == "probe" and report.get("nonce") == nonce, report
     assert report.get("pid") == host_pid and report.get("checks") == 8, report
+    assert report.get("version") == properties['version'], 'Wrong loaded payload version'
     for _ in range(20):
         if "restored" in root(f"cat {remote}/host-complete", check=False):
             break

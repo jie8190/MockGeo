@@ -84,8 +84,10 @@ try:
         run("shell", "am", "force-stop", "com.mockgeo.probe")
         identity = uuid.uuid4().hex
         run("shell", "am", "start", "-n", "com.mockgeo.probe/." + activity, "--es", "runId", identity,
-            "--ez", "expectedMock", str(not compatibility).lower(), "--ei", "durationMs", str(options.duration_seconds * 1000))
+            "--ez", "expectedMock", str(not compatibility).lower(), "--ez", "keepScreenOn", "true",
+            "--ei", "durationMs", str(options.duration_seconds * 1000))
         deadline = time.monotonic() + (options.duration_seconds + 15 if activity == "ProbeActivity" else 30)
+        next_foreground_check = time.monotonic() + 3
         while time.monotonic() < deadline:
             fresh = state()
             if fresh["et"] != last_et:
@@ -96,6 +98,15 @@ try:
                 report = json.loads(run("shell", "run-as", "com.mockgeo.probe", "cat", "files/" + filename, check=False))
             except ValueError:
                 report = {}
+            if time.monotonic() >= next_foreground_check:
+                activity_state = run("shell", "dumpsys", "activity", "activities")
+                resumed = [line for line in activity_state.splitlines()
+                    if ("mResumedActivity:" in line or "topResumedActivity=" in line) and "ActivityRecord{" in line]
+                foreground = bool(resumed) and all("com.mockgeo.probe/." + activity in line for line in resumed)
+                if not foreground:
+                    (out / ("incomplete-" + filename)).write_text(json.dumps(report, indent=2), encoding="utf-8")
+                    raise RuntimeError("Test receiver left the foreground; keep the independent probe visible and rerun")
+                next_foreground_check = time.monotonic() + 5
             if report.get("runId") == identity and any(e["api"] == "complete" for e in report.get("events", [])):
                 if activity == "ProbeActivity" and report.get("durationMs") != options.duration_seconds * 1000:
                     raise RuntimeError("Old probe APK cannot verify sustained delivery; install the matching new probe")
@@ -110,6 +121,7 @@ try:
                 break
             time.sleep(0.3)
         else:
+            (out / ("incomplete-" + filename)).write_text(json.dumps(report, indent=2), encoding="utf-8")
             raise RuntimeError("Probe timed out")
 finally:
     run("shell", "am", "force-stop", "com.mockgeo.probe", check=False)

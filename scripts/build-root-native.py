@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+from native_artifacts import verify_stripped
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--sdk", required=True)
@@ -27,3 +28,15 @@ subprocess.run([cmake, "-S", str(native), "-B", str(output), "-G", "Ninja",
     "-DANDROID_ABI=arm64-v8a", "-DANDROID_PLATFORM=android-26", "-DANDROID_STL=c++_static",
     "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"], check=True)
 subprocess.run([cmake, "--build", str(output), "--target", "mockgeo_root", "mockgeo_loader", "-j", "4"], check=True)
+
+# Keep full symbols locally for debugging, but ship a verified stripped copy.
+host = "windows-x86_64" if os.name == "nt" else ("darwin-x86_64" if os.uname().sysname == "Darwin" else "linux-x86_64")
+strip = ndk / f"toolchains/llvm/prebuilt/{host}/bin/llvm-strip{suffix}"
+stripped = output / "stripped"
+stripped.mkdir(exist_ok=True)
+for relative in ("jni/arm64-v8a/libmockgeo_root.so", "tools/mockgeo_loader"):
+    original = output / relative
+    target = stripped / original.name
+    shutil.copy2(original, target)
+    subprocess.run([str(strip), "--strip-debug", str(target)], check=True)
+    verify_stripped(original, target)

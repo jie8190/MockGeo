@@ -1,0 +1,9 @@
+Jafama (Java Fast Math) 2.3.2
+Author: Jeff Hain
+Project: https://sourceforge.net/projects/jafama/
+License: Apache License, Version 2.0
+The full Apache 2.0 license is included in assets/root/licenses/dobby/LICENSE.
+
+Jafama supplies the FastMath methods referenced by the bundled AMap SDK.
+The library is distributed without modification; release optimization may
+remove unused methods.
