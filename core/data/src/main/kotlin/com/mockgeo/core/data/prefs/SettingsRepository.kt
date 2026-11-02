@@ -2,6 +2,7 @@ package com.mockgeo.core.data.prefs
 
 import android.content.Context
 import com.mockgeo.core.model.RootSuPath
+import com.mockgeo.core.model.RootSuMode
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -41,6 +42,7 @@ data class AppSettings(
     val mapSatellite: Boolean = false,
     val compatibilityMode: Boolean = false,
     val rootSuPath: String = "",
+    val rootSuMode: RootSuMode = RootSuMode.AUTO,
 ) {
     companion object {
         val ENGINE_IDS = listOf("provider", "xposed", "root")
@@ -72,6 +74,7 @@ class SettingsRepository internal constructor(private val store: DataStore<Prefe
         val MAP_SATELLITE = booleanPreferencesKey("map_satellite")
         val COMPATIBILITY = booleanPreferencesKey("compatibility_format")
         val ROOT_SU_PATH = stringPreferencesKey("root_su_path")
+        val ROOT_SU_MODE = stringPreferencesKey("root_su_mode")
     }
 
     val settings: Flow<AppSettings> = store.data.map { p ->
@@ -96,6 +99,7 @@ class SettingsRepository internal constructor(private val store: DataStore<Prefe
             mapSatellite = p[Keys.MAP_SATELLITE] ?: false,
             compatibilityMode = p[Keys.COMPATIBILITY] ?: false,
             rootSuPath = p[Keys.ROOT_SU_PATH] ?: "",
+            rootSuMode = RootSuMode.parse(p[Keys.ROOT_SU_MODE]),
         )
     }
 
@@ -165,9 +169,12 @@ class SettingsRepository internal constructor(private val store: DataStore<Prefe
     suspend fun setMapSatellite(on: Boolean) = store.edit { it[Keys.MAP_SATELLITE] = on }
     suspend fun setCompatibilityMode(on: Boolean) = store.edit { it[Keys.COMPATIBILITY] = on }
 
-    suspend fun setRootSuPath(path: String) {
+    suspend fun setRootSuPath(path: String, mode: RootSuMode? = null) {
         val normalized = RootSuPath.normalize(path)
-        store.edit { it[Keys.ROOT_SU_PATH] = normalized }
+        store.edit {
+            it[Keys.ROOT_SU_PATH] = normalized
+            if (mode != null) it[Keys.ROOT_SU_MODE] = mode.name
+        }
     }
 
     fun exportJson(settings: AppSettings): String = SettingsJson.encode(settings)

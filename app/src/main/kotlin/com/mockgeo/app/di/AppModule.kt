@@ -50,7 +50,8 @@ val appModule = module {
 
     single<RootEngine> {
         val settings = get<SettingsRepository>()
-        RootEngine(androidContext(), get(), get(named("app")), get(), suPath = { settings.settings.first().rootSuPath })
+        RootEngine(androidContext(), get(), get(named("app")), get(), suPath = { settings.settings.first().rootSuPath },
+            suMode = { settings.settings.first().rootSuMode })
     }
 
     single<EngineRouter> {
@@ -85,7 +86,8 @@ object ManualDi {
         val provider = ProviderEngine(context, clock)
         val xposed = XposedEngine(context, clock, scope, log)
         val settings = SettingsRepository(context)
-        val root = RootEngine(context, clock, scope, log, suPath = { settings.settings.first().rootSuPath })
+        val root = RootEngine(context, clock, scope, log, suPath = { settings.settings.first().rootSuPath },
+            suMode = { settings.settings.first().rootSuMode })
         val router = EngineRouter(listOf(provider, xposed, root), scope, defaultEngineId = "provider")
         val session = SimulationSession(router, clock, log, scope)
         return SimController(session, clock, log, scope)

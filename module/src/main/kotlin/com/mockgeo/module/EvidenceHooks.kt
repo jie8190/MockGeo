@@ -18,7 +18,8 @@ internal object EvidenceHooks {
         }?.forEach { method ->
             count += hook(api, method) { args, result ->
                 val cfg = ModuleConfig.snapshot()
-                if (!Exemptions.isCallerExempt() && IdentityGuard.shouldHideMock(cfg) && args.firstOrNull() == mockOp)
+                if (IdentityGuard.shouldHideMock(cfg) && args.firstOrNull() == mockOp &&
+                    ProcessHookPolicy.isApplicationUid(android.os.Binder.getCallingUid()) && !Exemptions.isCallerExempt())
                     AppOpsManager.MODE_IGNORED else result
             }
         }
@@ -29,7 +30,8 @@ internal object EvidenceHooks {
         wifi?.declaredMethods?.filter { it.name in setOf("getScanResults", "getConnectionInfo") }?.forEach { m ->
             count += hook(api, m) { _, original ->
                 val cfg = ModuleConfig.snapshot()
-                if (Exemptions.isCallerExempt() || !IdentityGuard.shouldHideMock(cfg)) original
+                if (!IdentityGuard.shouldHideMock(cfg) ||
+                    !ProcessHookPolicy.isApplicationUid(android.os.Binder.getCallingUid()) || Exemptions.isCallerExempt()) original
                 else when (m.name) {
                     "getScanResults" -> ResultAdapter.list(m.returnType, original, fakeScanResults(cfg.lat, cfg.lng))
                     else -> fakeWifiInfo(cfg.lat, cfg.lng) ?: original

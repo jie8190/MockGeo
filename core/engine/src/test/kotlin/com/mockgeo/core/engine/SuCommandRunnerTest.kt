@@ -1,6 +1,7 @@
 package com.mockgeo.core.engine
 
 import com.google.common.truth.Truth.assertThat
+import com.mockgeo.core.model.RootSuMode
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.io.ByteArrayInputStream
@@ -11,7 +12,7 @@ import java.util.concurrent.TimeUnit
 class SuCommandRunnerTest {
     private class StubProcess(text: String, private val code: Int = 0, private val timeout: Boolean = false) : Process() {
         private val input = ByteArrayInputStream(text.toByteArray())
-        private val output = ByteArrayOutputStream()
+        val output = ByteArrayOutputStream()
         var alive = true
         var killed = false
         override fun getInputStream() = input
@@ -64,5 +65,53 @@ class SuCommandRunnerTest {
     @Test fun `output is drained but stored response is bounded`() {
         val answer = SuCommandRunner("") { StubProcess("x".repeat(200_000)) }.run("id")
         assertThat(answer.length).isEqualTo(64 * 1024)
+    }
+
+    @Test fun `custom stdin only executable is negotiated with id then used once per command`() {
+        val calls = mutableListOf<List<String>>()
+        val processes = mutableListOf<StubProcess>()
+        val runner = SuCommandRunner("/custom/su") { args ->
+            calls += args
+            StubProcess(if (args.size == 1) "uid=0(root)" else "unsupported option", if (args.size == 1) 0 else 2)
+                .also { processes += it }
+        }
+        runner.requireRoot()
+        runner.run("echo test\nfalse")
+        assertThat(calls).containsExactly(listOf("/custom/su", "-c", "id"), listOf("/custom/su"), listOf("/custom/su")).inOrder()
+        assertThat(processes[1].output.toString("UTF-8")).isEqualTo("id\nexit \$?\n")
+        assertThat(processes[2].output.toString("UTF-8")).isEqualTo("echo test\nfalse\nexit \$?\n")
+        assertThat(runner.selectedMode).isEqualTo(RootSuMode.STDIN)
+    }
+
+    @Test fun `explicit stdin bypasses incompatible argument parser`() {
+        val calls = mutableListOf<List<String>>()
+        SuCommandRunner("/custom/su", RootSuMode.STDIN) { args ->
+            calls += args; StubProcess("uid=0(root)")
+        }.requireRoot()
+        assertThat(calls).containsExactly(listOf("/custom/su"))
+    }
+
+    @Test fun `failed real commands and authorization timeout never trigger automatic replay`() {
+        var calls = 0
+        val runner = SuCommandRunner("/custom/su") { calls++; StubProcess("failed", 1) }
+        assertThrows<IllegalStateException> { runner.run("payload loader") }
+        assertThat(calls).isEqualTo(1)
+        calls = 0
+        assertThrows<IllegalStateException> {
+            SuCommandRunner("/custom/su") { calls++; StubProcess("", timeout = true) }.requireRoot()
+        }
+        assertThat(calls).isEqualTo(1)
+    }
+
+    @Test fun `permission failure does not leak custom executable or repeat authorization`() {
+        var calls = 0
+        val error = assertThrows<IllegalStateException> {
+            SuCommandRunner("/custom/secret-su") {
+                calls++; throw IOException("Cannot run /custom/secret-su: error=13, Permission denied")
+            }.requireRoot()
+        }
+        assertThat(calls).isEqualTo(1)
+        assertThat(error.message).contains("系统禁止")
+        assertThat(error.toString()).doesNotContain("secret-su")
     }
 }

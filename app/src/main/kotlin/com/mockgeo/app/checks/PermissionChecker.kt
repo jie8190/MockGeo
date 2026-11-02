@@ -15,7 +15,7 @@ import com.mockgeo.core.model.CheckResult
  */
 object PermissionChecker {
 
-    fun run(context: Context, engineRequiresMockAppOp: Boolean, engineRequiresModule: Boolean): List<CheckResult> {
+    fun run(context: Context, engineRequiresMockAppOp: Boolean): List<CheckResult> {
         val out = mutableListOf<CheckResult>()
 
         // 1. 定位权限
@@ -88,16 +88,7 @@ object PermissionChecker {
             )
         }
 
-        // 6. LSPosed 模块（仅 xposed 引擎需要；可达性由引擎自检补充）
-        if (engineRequiresModule) {
-            val installed = isModuleInstalled(context)
-            out += CheckResult(
-                name = "LSPosed 模块安装",
-                ok = installed,
-                message = if (installed) null else "未检测到 MockGeo 模块（com.mockgeo.module）",
-                actionKey = "NONE",
-            )
-        }
+        // Module installation and version are evaluated together with the live engine handshake.
 
         return out
     }
@@ -105,8 +96,4 @@ object PermissionChecker {
     private fun has(context: Context, permission: String): Boolean =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
-    private fun isModuleInstalled(context: Context): Boolean = runCatching {
-        context.packageManager.getPackageInfo("com.mockgeo.module", 0)
-        true
-    }.getOrDefault(false)
 }

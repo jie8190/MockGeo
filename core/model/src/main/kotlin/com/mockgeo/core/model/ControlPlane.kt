@@ -23,6 +23,7 @@ package com.mockgeo.core.model
 object ControlPlane {
     const val ROOT_PROVIDER = "mockgeo_root"
     const val KEY_REQUEST_NONCE = "request_nonce"
+    const val KEY_STATUS_SNAPSHOT = "status_snapshot_v1"
     const val COL_BACKEND = "backend"
     const val COL_PROCESS_ID = "process_id"
     const val COL_INSTANCE_NONCE = "instance_nonce"

@@ -57,9 +57,10 @@ class XposedEngine(
     private var watchdog: Job? = null
     private val publishMutex = Mutex()
     private val probeMutex = Mutex()
+    @Volatile private var directStatus: ModuleStatus? = null
     private val probe = ControlChannelProbe(clock, expectedBackend, log, send = { nonce ->
         val extras = Bundle().apply { putString(ControlPlane.KEY_REQUEST_NONCE, nonce) }
-        checkNotNull(lm) { "LocationManager unavailable" }.sendExtraCommand(controlProvider, ControlPlane.CMD_PING, extras)
+        sendCommand(ControlPlane.CMD_PING, extras)
     }, read = { queryStatus() })
 
     override fun state(): StateFlow<EngineState> = _state
@@ -80,8 +81,6 @@ class XposedEngine(
         val installedVersion = runCatching {
             context.packageManager.getPackageInfo("com.mockgeo.module", 0).versionName
         }.getOrNull()
-        val loadedVersionReady = reachable && moduleVersionSupported(status?.moduleVersion) &&
-            installedVersion == status?.moduleVersion
         return listOf(
             CheckResult(
                 name = "系统控制通道",
@@ -93,11 +92,7 @@ class XposedEngine(
                 if (reachable && status?.hooksInstalled == true) "模块已在系统中加载"
                 else if (reachable && !status?.hookDetail.isNullOrBlank()) "系统定位入口未完整加载：${status?.hookDetail}"
                 else "未确认系统钩子，请检查模块作用域及加载状态"),
-            CheckResult("模块版本", loadedVersionReady,
-                if (!reachable) "尚未收到加载版本"
-                else if (loadedVersionReady) "已安装并加载 ${status?.moduleVersion}"
-                else "已安装 ${installedVersion ?: "未知"}，系统加载 ${status?.moduleVersion}；需 $MIN_MODULE_VERSION 或更高版本，请在方便时手动重启"),
-        )
+        ) + ModuleReadiness.checks(installedVersion, reachable, status?.moduleVersion)
     }
 
     override suspend fun start(cfg: SimConfig): Result<Unit> {
@@ -175,7 +170,31 @@ class XposedEngine(
         .onFailure { log.log(0, SimLogger.WARN, TAG, "status query failed backend=$expectedBackend", it) }
         .getOrNull()?.takeIf { it.backend == expectedBackend || (expectedBackend == "xposed" && it.backend.isBlank()) }
 
-    private fun queryStatus(): ModuleStatus? = context.contentResolver.query(
+    private fun sendCommand(command: String, extras: Bundle): ModuleStatus? {
+        val nonce = extras.getString(ControlPlane.KEY_REQUEST_NONCE)
+            ?: java.util.UUID.randomUUID().toString().replace("-", "").also {
+                extras.putString(ControlPlane.KEY_REQUEST_NONCE, it)
+            }
+        checkNotNull(lm) { "LocationManager unavailable" }.sendExtraCommand(controlProvider, command, extras)
+        val reply = extras.getBundle(ControlPlane.KEY_STATUS_SNAPSHOT) ?: return null
+        @Suppress("DEPRECATION")
+        val receipt = DirectStatusReceipt.decode(reply.keySet().associateWith { reply.get(it) },
+            nonce, expectedBackend, clock.currentTimeMillis()) ?: return null
+        directStatus = receipt
+        return receipt
+    }
+
+    private fun queryStatus(): ModuleStatus? {
+        val direct = directStatus?.takeIf { it.isFresh(clock.currentTimeMillis()) }
+        val provider = try { queryProviderStatus() } catch (error: Exception) {
+            if (direct == null) throw error
+            return direct
+        }
+        return if (direct != null && (provider == null || provider.backend != expectedBackend ||
+                direct.updatedAt >= provider.updatedAt)) direct else provider
+    }
+
+    private fun queryProviderStatus(): ModuleStatus? = context.contentResolver.query(
             statusUri,
             null,
             null,
@@ -229,7 +248,6 @@ class XposedEngine(
         var lastError: Throwable? = null
         repeat(ControlPlane.CMD_RETRIES) { attempt ->
             val r = runCatching {
-                val l = checkNotNull(lm) { "LocationManager unavailable" }
                 val extras = Bundle().apply {
                     putLong(ControlPlane.KEY_REVISION, rev)
                     putBoolean(ControlPlane.KEY_ENABLED, enabled)
@@ -247,7 +265,7 @@ class XposedEngine(
                         putBoolean(ControlPlane.KEY_REPORT_MOCK, cfg.reportMock)
                     }
                 }
-                l.sendExtraCommand(controlProvider, ControlPlane.CMD_SET, extras)
+                val direct = sendCommand(ControlPlane.CMD_SET, extras)
                 // 辅助回执：inout 时模块已写入 ack_*；缺失不视为失败（主判据在状态 provider）
                 if (extras.containsKey(ControlPlane.KEY_ACK_SUCCESS) &&
                     !extras.getBoolean(ControlPlane.KEY_ACK_SUCCESS)
@@ -257,7 +275,7 @@ class XposedEngine(
                     )
                 }
                 // 主回执：状态 provider 确认
-                val st = readStatus()
+                val st = direct ?: readStatus()
                     ?: throw IllegalStateException("no status receipt from module (module not active?)")
                 if (!st.isFresh(clock.currentTimeMillis())) {
                     throw IllegalStateException("status receipt stale (module restarted?)")

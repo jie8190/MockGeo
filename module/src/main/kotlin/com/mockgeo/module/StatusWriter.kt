@@ -23,13 +23,10 @@ object StatusWriter {
     @Volatile
     private var systemContext: Context? = null
 
-    fun write(cfg: ModuleConfig) {
+    fun write(cfg: ModuleConfig, extras: android.os.Bundle? = null) {
+        val userId = Binder.getCallingUid() / 100_000
         val identity = Binder.clearCallingIdentity()
         try {
-            val ctx = obtainSystemContext() ?: run {
-                ModuleLog.w("status write skipped: system context unavailable")
-                return
-            }
             val values = ContentValues().apply {
                 put(ControlPlane.COL_ENABLED, cfg.enabled)
                 put(ControlPlane.COL_REVISION, cfg.revision)
@@ -54,8 +51,26 @@ object StatusWriter {
                 put(ControlPlane.COL_PUSHES, HookDiagnostics.pushes.get() + HookDiagnostics.pendingPushes.get())
                 put(ControlPlane.COL_REPORT_MOCK, cfg.reportMock)
             }
+            // Complete inout reply before attempting the provider. Package/provider visibility
+            // must not turn a loaded module into an apparent missing module.
+            extras?.putBundle(ControlPlane.KEY_STATUS_SNAPSHOT, android.os.Bundle().apply {
+                values.valueSet().forEach { (key, value) -> when (value) {
+                    is Boolean -> putBoolean(key, value)
+                    is Int -> putInt(key, value)
+                    is Long -> putLong(key, value)
+                    is Double -> putDouble(key, value)
+                    is String -> putString(key, value)
+                } }
+            })
+            val ctx = obtainSystemContext() ?: run {
+                ModuleLog.w("status write skipped: system context unavailable; direct reply prepared")
+                return
+            }
+            // system context belongs to user 0; the controller may be in another user/profile.
+            val destination = if (userId == 0) statusUri else statusUri.buildUpon()
+                .encodedAuthority("$userId@${ControlPlane.STATUS_AUTHORITY}").build()
             // insert = upsert 语义由 App 侧 provider 实现（replace）
-            if (ctx.contentResolver.insert(statusUri, values) == null) {
+            if (ctx.contentResolver.insert(destination, values) == null) {
                 ModuleLog.w("status write rejected by application provider")
             }
         } catch (t: Throwable) {
@@ -141,5 +156,5 @@ object StatusWriter {
         }
     }
 
-    const val MODULE_VERSION = "0.3.14"
+    const val MODULE_VERSION = "0.3.15"
 }

@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.mockgeo.core.model.RootSuPath
+import com.mockgeo.core.model.RootSuMode
 
 @Composable
 internal fun RootPreferences(vm: HomeViewModel, idle: Boolean) {
@@ -23,6 +24,7 @@ internal fun RootPreferences(vm: HomeViewModel, idle: Boolean) {
             Text("Root 授权", style = MaterialTheme.typography.titleSmall)
             Text(if (settings.rootSuPath.isBlank()) "su 路径：默认" else "su 路径：${settings.rootSuPath}",
                 style = MaterialTheme.typography.bodySmall)
+            Text("调用方式：${settings.rootSuMode.label}", style = MaterialTheme.typography.bodySmall)
             Text("临时 Root 可填写提权工具提供的 su 完整路径。授权检测只检查权限，不启动位置模拟。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -35,6 +37,7 @@ internal fun RootPreferences(vm: HomeViewModel, idle: Boolean) {
     }
     if (editing) {
         var path by rememberSaveable { mutableStateOf(settings.rootSuPath) }
+        var mode by rememberSaveable { mutableStateOf(settings.rootSuMode) }
         val validated = remember(path) { runCatching { RootSuPath.normalize(path) } }
         AlertDialog(onDismissRequest = { editing = false }, title = { Text("自定义 su 路径") },
             text = {
@@ -44,11 +47,17 @@ internal fun RootPreferences(vm: HomeViewModel, idle: Boolean) {
                         singleLine = true, isError = validated.isFailure,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false),
                         supportingText = { Text(validated.exceptionOrNull()?.message ?: "留空使用默认 su；只填写文件路径，不加引号或命令参数。") })
-                    Text("提权程序需支持 su -c 调用方式，并允许本应用执行。", style = MaterialTheme.typography.bodySmall)
+                    RootSuMode.entries.forEach { option ->
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            RadioButton(selected = mode == option, onClick = { mode = option })
+                            TextButton(onClick = { mode = option }) { Text(option.label) }
+                        }
+                    }
+                    Text("自动检测先尝试 -c；自定义程序不支持时再尝试标准输入。若 -c 一直等待，请手动选择标准输入。程序仍需允许本应用执行。", style = MaterialTheme.typography.bodySmall)
                     TextButton(onClick = { path = "" }) { Text("恢复默认路径") }
                 }
             },
-            confirmButton = { Button(onClick = { vm.setRootSuPath(validated.getOrThrow()); editing = false },
+            confirmButton = { Button(onClick = { vm.setRootSuPath(validated.getOrThrow(), mode); editing = false },
                 enabled = idle && !checking && !saving && validated.isSuccess) { Text("保存") } },
             dismissButton = { TextButton(onClick = { editing = false }) { Text("取消") } })
     }

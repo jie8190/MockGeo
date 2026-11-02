@@ -50,8 +50,8 @@ internal class SystemHookBootstrap(
 
     companion object {
         fun isSystemHostCandidate(systemServer: Boolean, uid: Int, packageName: String): Boolean =
-            systemServer || (uid == 1000 && packageName in setOf(
-                "android", "com.hihonor.systemserver", "com.huawei.systemserver",
-            ))
+            // A vendor package name is not a reliable process identity. Discovery still
+            // requires a real local location Binder before installing anything.
+            systemServer || uid == 1000
     }
 }

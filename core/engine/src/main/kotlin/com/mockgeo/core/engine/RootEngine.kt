@@ -8,6 +8,7 @@ import com.mockgeo.core.model.EngineState
 import com.mockgeo.core.model.InjectionEngine
 import com.mockgeo.core.model.SimConfig
 import com.mockgeo.core.model.SimError
+import com.mockgeo.core.model.RootSuMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -25,8 +26,8 @@ class RootEngine(
     scope: CoroutineScope,
 ) : InjectionEngine {
     constructor(context: Context, clock: Clock, scope: CoroutineScope, log: SimLogger,
-                suPath: suspend () -> String = { "" }) : this(
-        RootDeployment(context, suPath),
+                suPath: suspend () -> String = { "" }, suMode: suspend () -> RootSuMode = { RootSuMode.AUTO }) : this(
+        RootDeployment(context, suPath, suMode),
         XposedEngine(context, clock, scope, log, ControlPlane.ROOT_PROVIDER, "root"),
         XposedEngine(context, clock, scope, log),
         scope,

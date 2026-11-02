@@ -60,11 +60,20 @@ class SystemHookBootstrapTest {
         assertThat(failures.single()?.message).isEqualTo("fixture")
     }
 
-    @Test fun `only system UID vendor candidates or explicit framework process get fallback`() {
+    @Test fun `system UID vendor names can discover local service without becoming client targets`() {
         assertThat(SystemHookBootstrap.isSystemHostCandidate(false, 1000, "com.hihonor.systemserver")).isTrue()
         assertThat(SystemHookBootstrap.isSystemHostCandidate(false, 10123, "com.hihonor.systemserver")).isFalse()
-        assertThat(SystemHookBootstrap.isSystemHostCandidate(false, 1000, "unrelated.app")).isFalse()
+        assertThat(SystemHookBootstrap.isSystemHostCandidate(false, 1000, "unrelated.app")).isTrue()
         assertThat(SystemHookBootstrap.isSystemHostCandidate(true, 1000, "android")).isTrue()
+    }
+
+    @Test fun `client hooks never enter shared system isolated or SDK sandbox processes`() {
+        for (uid in listOf(0, 1000, 1001, 101000, 20000, 99000, 199000)) {
+            assertThat(ProcessHookPolicy.allowClientHooks(false, uid, "com.vendor.service")).isFalse()
+        }
+        assertThat(ProcessHookPolicy.allowClientHooks(true, 10123, "com.test.app")).isFalse()
+        assertThat(ProcessHookPolicy.allowClientHooks(false, 10123, "com.test.app")).isTrue()
+        assertThat(ProcessHookPolicy.allowClientHooks(false, 110123, "com.test.app")).isTrue()
     }
 
     @Test fun `framework log failures cannot interrupt system hooks and debug does not flood manager`() {

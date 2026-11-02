@@ -65,6 +65,7 @@ class MockGeoModule : XposedModule() {
             bootstrap.discoverWhenReady()
             return
         }
+        if (!ProcessHookPolicy.allowClientHooks(systemServer, android.os.Process.myUid(), param.packageName)) return
         runCatching { AppScopeHooks.install(this, param.classLoader, param.packageName) }
             .onFailure { report("app-scope install failed", it) }
     }

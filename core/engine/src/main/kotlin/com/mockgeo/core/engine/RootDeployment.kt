@@ -13,7 +13,8 @@ import java.util.Properties
 import java.util.UUID
 
 /** Deploys only bundled, hash-checked artifacts. Does not install an LSPosed/Magisk module. */
-class RootDeployment(private val context: Context, private val suPath: suspend () -> String = { "" }) : RootEnvironment {
+class RootDeployment(private val context: Context, private val suPath: suspend () -> String = { "" },
+                     private val suMode: suspend () -> com.mockgeo.core.model.RootSuMode = { com.mockgeo.core.model.RootSuMode.AUTO }) : RootEnvironment {
     private val manifest by lazy {
         Properties().apply { context.assets.open("root/manifest.properties").use { load(it) } }
     }
@@ -21,7 +22,7 @@ class RootDeployment(private val context: Context, private val suPath: suspend (
 
     override suspend fun readiness(): List<CheckResult> = withContext(Dispatchers.IO) {
         val artifacts = runCatching { version.isNotBlank() && ARTIFACTS.all { manifest.getProperty(it)?.matches(HASH) == true } }.getOrDefault(false)
-        val shell = runCatching { SuCommandRunner(suPath()) }
+        val shell = runCatching { SuCommandRunner(suPath(), suMode()) }
         val authorization = runCatching { shell.getOrThrow().requireRoot() }
         val hasRoot = authorization.isSuccess
         val runtimeCheck = runCatching {
@@ -43,7 +44,7 @@ class RootDeployment(private val context: Context, private val suPath: suspend (
 
     override suspend fun load(): RootReceipt = withContext(Dispatchers.IO) {
         require(Build.SUPPORTED_ABIS.firstOrNull() == "arm64-v8a") { "Root loader requires ARM64" }
-        val shell = SuCommandRunner(suPath())
+        val shell = SuCommandRunner(suPath(), suMode())
         shell.requireRoot()
         val pid = shell.run("pidof system_server").trim().toIntOrNull() ?: error("system_server PID unavailable")
         requireIndependentRuntime(shell, pid)

@@ -25,6 +25,7 @@ object CommandDispatcher {
                 writeAck(extras, success = false, error = "unauthorized caller")
                 return java.lang.Boolean.TRUE
             }
+            ModuleRuntime.responseNonce = extras?.getString(ControlPlane.KEY_REQUEST_NONCE).orEmpty().take(64)
             when (cmd) {
                 ControlPlane.CMD_SET -> handleSet(extras)
                 ControlPlane.CMD_STOP -> handleStop(extras)
@@ -55,7 +56,7 @@ object CommandDispatcher {
         val enabled = b.getBoolean(ControlPlane.KEY_ENABLED, false)
         if (enabled && !ModuleConfig.hooksReady) {
             writeAck(b, success = false, error = "system hooks incomplete: ${ModuleConfig.hookDetail}")
-            StatusWriter.write(ModuleConfig.snapshot())
+            StatusWriter.write(ModuleConfig.snapshot(), extras)
             return
         }
         val beginningSession = enabled && !ModuleConfig.snapshot().enabled
@@ -83,7 +84,7 @@ object CommandDispatcher {
         val accepted = applied.revision == rev
         if (accepted && beginningSession) HookDiagnostics.reset()
         writeAck(b, success = accepted, error = if (accepted) null else "stale revision", appliedRevision = applied.revision)
-        StatusWriter.write(applied)
+        StatusWriter.write(applied, extras)
         ListenerPusher.onConfigChanged(applied)
         ModuleLog.d("SET rev=$rev enabled=$enabled accepted=$accepted")
     }
@@ -91,7 +92,7 @@ object CommandDispatcher {
     private fun handleStop(extras: Bundle?) {
         val applied = ModuleConfig.setEnabled(false)
         writeAck(extras, success = true, appliedRevision = applied.revision)
-        StatusWriter.write(applied)
+        StatusWriter.write(applied, extras)
         ListenerPusher.onConfigChanged(applied)
         ModuleLog.d("STOP applied, enabled=false")
     }
@@ -107,7 +108,7 @@ object CommandDispatcher {
             putLong(ControlPlane.KEY_STATUS_UPTIME_MS, StatusWriter.uptimeMs())
         }
         // 主回执通道也刷新一次（App 可能只看 provider）
-        StatusWriter.write(cfg)
+        StatusWriter.write(cfg, extras)
         ModuleLog.d("GET_STATUS enabled=${cfg.enabled}")
     }
 
@@ -117,7 +118,7 @@ object CommandDispatcher {
             putBoolean(ControlPlane.KEY_PONG, true)
             putString(ControlPlane.KEY_MODULE_VERSION, ModuleRuntime.version)
         }
-        StatusWriter.write(ModuleConfig.snapshot())
+        StatusWriter.write(ModuleConfig.snapshot(), extras)
         ModuleLog.d("PING")
     }
 

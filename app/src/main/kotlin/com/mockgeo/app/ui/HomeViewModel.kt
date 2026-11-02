@@ -186,7 +186,7 @@ class HomeViewModel(
     }
 
     private suspend fun engineChecks(prefs: AppSettings): List<CheckResult> = withContext(Dispatchers.IO) {
-        PermissionChecker.run(appContext, prefs.engineId == "provider", prefs.engineId == "xposed") +
+        PermissionChecker.run(appContext, prefs.engineId == "provider") +
             if (prefs.engineId in setOf("xposed", "root")) router.selfCheck(prefs.engineId) else emptyList()
     }
     fun startFixed(context: Context) = work {
@@ -324,7 +324,7 @@ class HomeViewModel(
         settingsRepo.setEngine(id)
         refreshChecks()
     }
-    fun setRootSuPath(path: String) {
+    fun setRootSuPath(path: String, mode: com.mockgeo.core.model.RootSuMode) {
         if (sim.value.engineState != EngineState.Idle || _checkingRoot.value || _savingRootPath.value) {
             postMessage("请先停止模拟并等待授权检测结束")
             return
@@ -332,7 +332,7 @@ class HomeViewModel(
         _savingRootPath.value = true
         work("su 路径已保存") {
             try {
-                settingsRepo.setRootSuPath(path)
+                settingsRepo.setRootSuPath(path, mode)
                 _rootAccessCheck.value = null
                 refreshChecks()
             } finally { _savingRootPath.value = false }
@@ -344,7 +344,10 @@ class HomeViewModel(
         _checkingRoot.value = true
         _rootAccessCheck.value = null
         work {
-            try { _rootAccessCheck.value = RootAccess.check(settingsRepo.settings.first().rootSuPath) }
+            try {
+                val prefs = settingsRepo.settings.first()
+                _rootAccessCheck.value = RootAccess.check(prefs.rootSuPath, prefs.rootSuMode)
+            }
             finally { _checkingRoot.value = false }
         }
     }
@@ -519,6 +522,7 @@ class HomeViewModel(
             "应用包名" to appContext.packageName,
             "应用用户空间" to (android.os.Process.myUid() / 100_000).toString(),
             "Root 执行入口" to if (settings.value.rootSuPath.isBlank()) "默认 su" else "自定义路径（不导出路径内容）",
+            "Root 调用方式" to settings.value.rootSuMode.label,
             "模拟位置候选声明" to runCatching {
                 val permissions = appContext.packageManager.getPackageInfo(appContext.packageName,
                     android.content.pm.PackageManager.GET_PERMISSIONS).requestedPermissions.orEmpty()
@@ -537,7 +541,10 @@ class HomeViewModel(
             "系统省电模式" to power.isPowerSaveMode.toString(),
             "设备空闲模式" to power.isDeviceIdleMode.toString(),
             "厂商省电策略" to "需在应用省电设置中确认；标准电池豁免不代表厂商已设为不受限制",
-            "已安装模块版本" to runCatching { appContext.packageManager.getPackageInfo("com.mockgeo.module", 0).versionName.orEmpty() }.getOrDefault("未安装"),
+            "已安装模块版本" to runCatching {
+                appContext.packageManager.getPackageInfo("com.mockgeo.module", 0).versionName
+                    ?.takeIf { it.isNotBlank() } ?: "安装包未提供版本号"
+            }.getOrDefault("无法查询（可能未安装或当前用户空间不可见）；请结合系统加载回执判断"),
         )
         (ui.engineState as? EngineState.Failed)?.detail?.let { details += "失败详情" to it }
         _rootAccessCheck.value?.let { details += "Root 授权检测" to (it.message ?: if (it.ok) "通过" else "未通过") }

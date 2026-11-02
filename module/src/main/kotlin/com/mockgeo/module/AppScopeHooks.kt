@@ -22,7 +22,7 @@ internal object AppScopeHooks {
 
     @Synchronized
     fun install(api: XposedInterface, loader: ClassLoader, packageName: String) {
-        if (packageName == com.mockgeo.core.model.ControlPlane.APP_PACKAGE || packageName == "android" || !installed.add(loader)) return
+        if (!ProcessHookPolicy.allowClientHooks(false, android.os.Process.myUid(), packageName) || !installed.add(loader)) return
         selfPackage = packageName
         val location = Class.forName("android.location.Location", false, loader)
         for (method in location.declaredMethods.filter { it.name in setOf("isMock", "isFromMockProvider") && it.parameterCount == 0 }) {
@@ -35,6 +35,7 @@ internal object AppScopeHooks {
         secure.declaredMethods.filter { it.name in setOf("getString", "getStringForUser", "getInt", "getIntForUser") }.forEach { method ->
             runCatching { api.hook(method).intercept(XposedInterface.Hooker { chain ->
                 val key = chain.args.getOrNull(1) as? String
+                if (key !in setOf("mock_location", "allow_mock_location")) return@Hooker chain.proceed()
                 val state = AppScopeConfig.snapshot(appContext())
                 if (isActive(state) && state.hideMock && key in setOf("mock_location", "allow_mock_location")) {
                     if (method.returnType == Int::class.javaPrimitiveType) 0 else null
