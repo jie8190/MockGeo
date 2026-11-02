@@ -1,6 +1,7 @@
 package com.mockgeo.core.data.prefs
 
 import android.content.Context
+import com.mockgeo.core.model.RootSuPath
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -39,6 +40,7 @@ data class AppSettings(
     val amapConsent: Boolean = false,
     val mapSatellite: Boolean = false,
     val compatibilityMode: Boolean = false,
+    val rootSuPath: String = "",
 ) {
     companion object {
         val ENGINE_IDS = listOf("provider", "xposed", "root")
@@ -69,6 +71,7 @@ class SettingsRepository internal constructor(private val store: DataStore<Prefe
         val AMAP_CONSENT = booleanPreferencesKey("amap_consent")
         val MAP_SATELLITE = booleanPreferencesKey("map_satellite")
         val COMPATIBILITY = booleanPreferencesKey("compatibility_format")
+        val ROOT_SU_PATH = stringPreferencesKey("root_su_path")
     }
 
     val settings: Flow<AppSettings> = store.data.map { p ->
@@ -92,6 +95,7 @@ class SettingsRepository internal constructor(private val store: DataStore<Prefe
             amapConsent = p[Keys.AMAP_CONSENT] ?: false,
             mapSatellite = p[Keys.MAP_SATELLITE] ?: false,
             compatibilityMode = p[Keys.COMPATIBILITY] ?: false,
+            rootSuPath = p[Keys.ROOT_SU_PATH] ?: "",
         )
     }
 
@@ -160,6 +164,11 @@ class SettingsRepository internal constructor(private val store: DataStore<Prefe
     }
     suspend fun setMapSatellite(on: Boolean) = store.edit { it[Keys.MAP_SATELLITE] = on }
     suspend fun setCompatibilityMode(on: Boolean) = store.edit { it[Keys.COMPATIBILITY] = on }
+
+    suspend fun setRootSuPath(path: String) {
+        val normalized = RootSuPath.normalize(path)
+        store.edit { it[Keys.ROOT_SU_PATH] = normalized }
+    }
 
     fun exportJson(settings: AppSettings): String = SettingsJson.encode(settings)
 

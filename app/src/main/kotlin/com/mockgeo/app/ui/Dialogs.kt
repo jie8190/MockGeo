@@ -182,6 +182,7 @@ fun SettingsDialog(vm: HomeViewModel, onDismiss: () -> Unit) {
                     else -> "启用 MockGeo 模块后生效，全局接管定位请求。"
                 }
             } else "正在模拟位置中，停止模拟后可切换运行模式。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            RootPreferences(vm, idle)
             if (settings.engineId == "xposed" || settings.engineId == "root") {
                 Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)) {
                     Box(Modifier.padding(16.dp)) {
@@ -352,7 +353,7 @@ internal fun rememberPermissionAction(vm: HomeViewModel): (CheckResult) -> Unit 
                 if (check.name.contains("通知") && Build.VERSION.SDK_INT >= 33) permissions.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
                 else permissions.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
             }
-            else -> vm.postMessage("安装 MockGeo 模块，在 LSPosed 中启用并勾选系统框架，然后重启设备")
+            else -> vm.postMessage(check.message ?: "请在偏好设置中检查当前运行模式的配置")
         }
     }
 }

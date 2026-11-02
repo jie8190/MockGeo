@@ -24,8 +24,9 @@ class RootEngine(
     private val legacy: SystemHookControl,
     scope: CoroutineScope,
 ) : InjectionEngine {
-    constructor(context: Context, clock: Clock, scope: CoroutineScope, log: SimLogger) : this(
-        RootDeployment(context),
+    constructor(context: Context, clock: Clock, scope: CoroutineScope, log: SimLogger,
+                suPath: suspend () -> String = { "" }) : this(
+        RootDeployment(context, suPath),
         XposedEngine(context, clock, scope, log, ControlPlane.ROOT_PROVIDER, "root"),
         XposedEngine(context, clock, scope, log),
         scope,

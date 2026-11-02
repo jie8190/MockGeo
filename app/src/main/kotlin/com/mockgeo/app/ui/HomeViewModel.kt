@@ -26,6 +26,7 @@ import com.mockgeo.core.data.prefs.AppSettings
 import com.mockgeo.core.data.prefs.SettingsRepository
 import com.mockgeo.core.data.repo.LocationRepository
 import com.mockgeo.core.engine.EngineRouter
+import com.mockgeo.core.engine.RootAccess
 import com.mockgeo.core.model.*
 import com.mockgeo.core.route.Gpx
 import com.mockgeo.core.route.EditableRoute
@@ -66,6 +67,12 @@ class HomeViewModel(
     val message: StateFlow<String?> = _message
     private val _diagnosticBusy = MutableStateFlow(false)
     val diagnosticBusy: StateFlow<Boolean> = _diagnosticBusy
+    private val _checkingRoot = MutableStateFlow(false)
+    val checkingRoot: StateFlow<Boolean> = _checkingRoot
+    private val _savingRootPath = MutableStateFlow(false)
+    val savingRootPath: StateFlow<Boolean> = _savingRootPath
+    private val _rootAccessCheck = MutableStateFlow<CheckResult?>(null)
+    val rootAccessCheck: StateFlow<CheckResult?> = _rootAccessCheck
     private val _routeDraft = MutableStateFlow<List<LatLng>>(emptyList())
     val routeDraft: StateFlow<List<LatLng>> = _routeDraft
     private val _routeControls = MutableStateFlow<List<LatLng>>(emptyList())
@@ -166,6 +173,7 @@ class HomeViewModel(
     fun deleteHistory(id: Long) = work { repo.deleteHistory(id) }
 
     private suspend fun prepareStart(): AppSettings? {
+        if (_savingRootPath.value) { postMessage("正在保存 su 路径，请稍后开始"); return null }
         (appContext.applicationContext as com.mockgeo.app.MockGeoApp).ready.await()
         val prefs = settingsRepo.settings.first()
         controller.updateSettings(prefs)
@@ -315,6 +323,30 @@ class HomeViewModel(
         router.switch(id).getOrThrow()
         settingsRepo.setEngine(id)
         refreshChecks()
+    }
+    fun setRootSuPath(path: String) {
+        if (sim.value.engineState != EngineState.Idle || _checkingRoot.value || _savingRootPath.value) {
+            postMessage("请先停止模拟并等待授权检测结束")
+            return
+        }
+        _savingRootPath.value = true
+        work("su 路径已保存") {
+            try {
+                settingsRepo.setRootSuPath(path)
+                _rootAccessCheck.value = null
+                refreshChecks()
+            } finally { _savingRootPath.value = false }
+        }
+    }
+    fun checkRootAccess() {
+        if (_checkingRoot.value || _savingRootPath.value) return
+        if (sim.value.engineState != EngineState.Idle) { postMessage("请先停止模拟再检测授权"); return }
+        _checkingRoot.value = true
+        _rootAccessCheck.value = null
+        work {
+            try { _rootAccessCheck.value = RootAccess.check(settingsRepo.settings.first().rootSuPath) }
+            finally { _checkingRoot.value = false }
+        }
     }
     fun setInterval(ms: Long) = work { settingsRepo.setInterval(ms.coerceIn(200, 2000)) }
     fun setAccuracy(m: Double) = work { settingsRepo.setAccuracy(m.coerceIn(1.0, 50.0)) }
@@ -486,6 +518,7 @@ class HomeViewModel(
             "应用版本" to "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
             "应用包名" to appContext.packageName,
             "应用用户空间" to (android.os.Process.myUid() / 100_000).toString(),
+            "Root 执行入口" to if (settings.value.rootSuPath.isBlank()) "默认 su" else "自定义路径（不导出路径内容）",
             "模拟位置候选声明" to runCatching {
                 val permissions = appContext.packageManager.getPackageInfo(appContext.packageName,
                     android.content.pm.PackageManager.GET_PERMISSIONS).requestedPermissions.orEmpty()
@@ -507,6 +540,7 @@ class HomeViewModel(
             "已安装模块版本" to runCatching { appContext.packageManager.getPackageInfo("com.mockgeo.module", 0).versionName.orEmpty() }.getOrDefault("未安装"),
         )
         (ui.engineState as? EngineState.Failed)?.detail?.let { details += "失败详情" to it }
+        _rootAccessCheck.value?.let { details += "Root 授权检测" to (it.message ?: if (it.ok) "通过" else "未通过") }
         val now = System.currentTimeMillis()
         router.moduleSnapshot()?.let { status ->
             details += listOf(
@@ -526,7 +560,7 @@ class HomeViewModel(
             )
         } ?: run { details += "系统回执" to "当前进程尚未读取到回执" }
         return DiagnosticReport.render(details, checks.value, controller.recentLogs(),
-            listOf(BuildConfig.AMAP_API_KEY, AmapKeyStore.getCustomApiKey(appContext)))
+            listOf(BuildConfig.AMAP_API_KEY, AmapKeyStore.getCustomApiKey(appContext), settings.value.rootSuPath))
     }
 
     private fun diagnosticAction(action: suspend (String) -> Unit) {

@@ -19,6 +19,7 @@ import com.mockgeo.app.sim.SimController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -47,7 +48,10 @@ val appModule = module {
 
     single<XposedEngine> { XposedEngine(androidContext(), get(), get(named("app")), get()) }
 
-    single<RootEngine> { RootEngine(androidContext(), get(), get(named("app")), get()) }
+    single<RootEngine> {
+        val settings = get<SettingsRepository>()
+        RootEngine(androidContext(), get(), get(named("app")), get(), suPath = { settings.settings.first().rootSuPath })
+    }
 
     single<EngineRouter> {
         val engines: List<InjectionEngine> = listOf(get<ProviderEngine>(), get<XposedEngine>(), get<RootEngine>())
@@ -80,7 +84,8 @@ object ManualDi {
         val log: SimLogger = RingSimLogger()
         val provider = ProviderEngine(context, clock)
         val xposed = XposedEngine(context, clock, scope, log)
-        val root = RootEngine(context, clock, scope, log)
+        val settings = SettingsRepository(context)
+        val root = RootEngine(context, clock, scope, log, suPath = { settings.settings.first().rootSuPath })
         val router = EngineRouter(listOf(provider, xposed, root), scope, defaultEngineId = "provider")
         val session = SimulationSession(router, clock, log, scope)
         return SimController(session, clock, log, scope)

@@ -21,6 +21,27 @@ class SettingsRepositoryTest {
         assertThat(repository.settings.first().amapConsent).isFalse()
     }
 
+    @Test fun `su path survives repository recreation and can restore default`() = runTest {
+        val store = MemoryStore()
+        val repository = SettingsRepository(store)
+        assertThat(repository.settings.first().rootSuPath).isEmpty()
+        repository.setRootSuPath(" /data/local/tmp/superuser ")
+        assertThat(SettingsRepository(store).settings.first().rootSuPath).isEqualTo("/data/local/tmp/superuser")
+        repository.setRootSuPath("")
+        assertThat(SettingsRepository(store).settings.first().rootSuPath).isEmpty()
+    }
+
+    @Test fun `backup excludes executable and imported settings cannot replace local path`() = runTest {
+        val repository = SettingsRepository(MemoryStore())
+        repository.setRootSuPath("/data/local/tmp/device-su")
+        val exported = repository.exportJson(repository.settings.first())
+        assertThat(exported).doesNotContain("device-su")
+        val imported = org.json.JSONObject(exported)
+        imported.getJSONObject("settings").put("rootSuPath", "/another/su")
+        repository.importJson(imported.toString())
+        assertThat(repository.settings.first().rootSuPath).isEqualTo("/data/local/tmp/device-su")
+    }
+
     @Test fun `choosing map or editing settings does not grant consent and withdrawal persists`() = runTest {
         val store = MemoryStore()
         val repository = SettingsRepository(store)

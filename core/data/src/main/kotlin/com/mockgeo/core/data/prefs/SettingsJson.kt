@@ -3,7 +3,7 @@ package com.mockgeo.core.data.prefs
 import org.json.JSONObject
 import org.json.JSONTokener
 
-/** Versioned, portable preference backup. Runtime engine selection is deliberately local. */
+/** Portable preferences. Runtime engine selection and su executable stay local. */
 internal object SettingsJson {
     fun encode(value: AppSettings): String {
         val payload = JSONObject()
