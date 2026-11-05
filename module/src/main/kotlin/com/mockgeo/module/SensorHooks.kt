@@ -34,9 +34,10 @@ internal object SensorHooks {
                 }
                 return
             }
+            if (state.stepCadenceSpm == 0) { steps.reset(); original.onSensorChanged(event); return }
             val old = event.values[0]
-            val value = if (type == Sensor.TYPE_STEP_COUNTER) steps.counter(old, state.speed, state.session, SystemClock.elapsedRealtime())
-                else steps.detector(state.speed, state.session, SystemClock.elapsedRealtime()) ?: return
+            val value = if (type == Sensor.TYPE_STEP_COUNTER) steps.counter(old, state.speed, state.session, SystemClock.elapsedRealtime(), state.stepCadenceSpm)
+                else steps.detector(state.speed, state.session, SystemClock.elapsedRealtime(), state.stepCadenceSpm) ?: return
             try { event.values[0] = value; original.onSensorChanged(event) }
             finally { event.values[0] = old } // framework may reuse this array
         }
@@ -80,20 +81,22 @@ internal object SensorHooks {
 internal class StepAccumulator {
     private var session = Long.MIN_VALUE
     private var lastAt = 0L
-    private var lastSpeed = 0f
+    private var lastRate = 0.0
     private var total = 0.0
     private var lastDetectorAt = Long.MIN_VALUE
     private var detectorSession = Long.MIN_VALUE
-    fun counter(real: Float, speed: Float, id: Long, now: Long): Float {
-        if (id != session) { session = id; total = real.toDouble(); lastAt = now; lastSpeed = speed }
+    fun reset() { session = Long.MIN_VALUE; detectorSession = Long.MIN_VALUE; lastRate = 0.0 }
+    fun counter(real: Float, speed: Float, id: Long, now: Long, cadence: Int = 60): Float {
+        val rate = if (speed > 0f) cadence.coerceIn(0, 300) / 60.0 else 0.0
+        if (id != session) { session = id; total = real.toDouble(); lastAt = now; lastRate = rate }
         val dt = (now - lastAt).coerceAtLeast(0)
-        if (lastSpeed > 0f) total += dt / 1000.0
-        lastAt = now; lastSpeed = speed
+        total += dt / 1000.0 * lastRate
+        lastAt = now; lastRate = rate
         return kotlin.math.floor(total).toFloat()
     }
-    fun detector(speed: Float, id: Long, now: Long): Float? {
+    fun detector(speed: Float, id: Long, now: Long, cadence: Int = 120): Float? {
         if (id != detectorSession) { detectorSession = id; lastDetectorAt = Long.MIN_VALUE }
-        if (speed <= 0f || (lastDetectorAt != Long.MIN_VALUE && now - lastDetectorAt < 500)) return null
+        if (speed <= 0f || cadence <= 0 || (lastDetectorAt != Long.MIN_VALUE && now - lastDetectorAt < 60_000.0 / cadence.coerceAtMost(300))) return null
         lastDetectorAt = now
         return 1f
     }

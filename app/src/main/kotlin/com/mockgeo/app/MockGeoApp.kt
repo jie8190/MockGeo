@@ -45,6 +45,9 @@ class MockGeoApp : Application() {
         // 对 provider 引擎：test provider 随进程死亡已被系统移除，stop 幂等无害。
         appScope.launch {
             try {
+                org.koin.core.context.GlobalContext.get().get<com.mockgeo.core.engine.SimLogger>().log(
+                    0, com.mockgeo.core.engine.SimLogger.INFO, "Startup",
+                    "应用进程启动，恢复停止状态；此前模拟不会自动继续，请在地图上重新开始")
                 session.resetToIdle()
                 val settings = org.koin.core.context.GlobalContext.get().get<SettingsRepository>()
                 val router = org.koin.core.context.GlobalContext.get().get<EngineRouter>()

@@ -29,6 +29,8 @@ class SimController(
         val paused: Boolean = false,
         val routeDistanceM: Double = 0.0,
         val routePoints: List<LatLng> = emptyList(),
+        val routeMode: RouteMode = RouteMode.ONCE,
+        val completedLaps: Long = 0,
     )
     private val _ui = MutableStateFlow(SimUiState())
     val ui: StateFlow<SimUiState> = _ui
@@ -88,7 +90,8 @@ class SimController(
         routeSim = null
         joystickMover = null
         _ui.update { it.copy(mode = Mode.FIXED, currentPosition = pos, routeProgress = 0.0,
-            routeDistanceM = 0.0, routePoints = emptyList(), paused = false, currentSpeedMps = 0.0) }
+            routeDistanceM = 0.0, routePoints = emptyList(), routeMode = RouteMode.ONCE, completedLaps = 0,
+            paused = false, currentSpeedMps = 0.0) }
         start(buildConfig(pos, 0.0, 0f))
     }
 
@@ -112,7 +115,8 @@ class SimController(
         fixedPosition = null
         joystickMover = null
         _ui.update { it.copy(mode = Mode.ROUTE, currentPosition = points.first(), routeProgress = 0.0,
-            routeDistanceM = total, routePoints = points, paused = false, currentSpeedMps = 0.0) }
+            routeDistanceM = total, routePoints = points, routeMode = mode, completedLaps = 0,
+            paused = false, currentSpeedMps = 0.0) }
         start(buildConfig(points.first(), 0.0, 0f).copy(altitude = routeDetails.firstOrNull()?.altitude ?: settings.altitudeM))
     }
 
@@ -124,7 +128,8 @@ class SimController(
         routeSim = null
         fixedPosition = null
         _ui.update { it.copy(mode = Mode.JOYSTICK, currentPosition = origin, paused = false,
-            routeProgress = 0.0, routePoints = emptyList(), routeDistanceM = 0.0, currentSpeedMps = 0.0) }
+            routeProgress = 0.0, routePoints = emptyList(), routeMode = RouteMode.ONCE, completedLaps = 0,
+            routeDistanceM = 0.0, currentSpeedMps = 0.0) }
         start(buildConfig(origin, 0.0, 0f))
     }
 
@@ -206,7 +211,7 @@ class SimController(
             Mode.ROUTE -> {
                 val route = routeSim ?: return
                 val pos = route.advance(dt)
-                _ui.update { it.copy(routeProgress = (route.progress / route.totalDistance).coerceIn(0.0, 1.0)) }
+                _ui.update { it.copy(routeProgress = (route.progress / route.totalDistance).coerceIn(0.0, 1.0), completedLaps = route.completedLaps) }
                 buildConfig(jitter(pos, dt), route.currentSpeed(), route.bearing()).copy(altitude = routeAltitude(route.progress))
             }
             Mode.JOYSTICK -> {
@@ -251,6 +256,7 @@ class SimController(
         jitterEnabled = settings.jitterEnabled, jitterMeters = settings.jitterMeters,
         networkProviderToo = settings.networkProviderToo,
         reportMock = !settings.compatibilityMode,
+        stepCadenceSpm = settings.stepCadenceSpm,
     )
     fun recentLogs(): List<SimLogger.LogLine> = log.recent()
 }

@@ -56,6 +56,7 @@ object ControlPlane {
     const val KEY_JITTER_METERS = "jitter_meters"
     const val KEY_REPORT_INTERVAL_MS = "report_interval_ms"
     const val KEY_REPORT_MOCK = "report_mock"
+    const val KEY_STEP_CADENCE = "step_cadence_spm"
 
     /** 回执字段（模块写回命令 Bundle，inout 时可见）。 */
     const val KEY_ACK_SUCCESS = "ack_success"

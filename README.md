@@ -28,7 +28,7 @@
 
 ### 1. 运行模式
 - **LSPosed 模式 (`xposed`)**：需要支持 `libxposed API 102` 的框架，注入 `system_server`，在系统定位服务出口直接合成并分发位置，无需污染系统底层 Provider 缓存，**停止模拟后无需重启即可立即恢复真实物理位置**。
-- **Root 直连 (`root`，实验)**：主应用内置 ARM64 加载器和系统定位载荷，通过 Root 加载并校验独立的系统进程回执，无需另装 MockGeo 模块 APK。Root **0.1.0** 已在 Xiaomi 15 / Android 16 / KernelSU 上完成真实系统定位验收；本版 **0.1.4** 的独立进程加载与 8 项钩子检查通过，尚未单独完成纯 Root 接管系统服务的复测。当前拒绝与驻留的 LSPosed ART 框架叠加运行，需要先停用 LSPosed 注入并手动重启，或继续使用 LSPosed 模式。Root 路径暂不覆盖应用进程内传感器/SDK 缓存钩子。
+- **Root 直连 (`root`，实验)**：主应用内置 ARM64 加载器和系统定位载荷，通过 Root 加载并校验独立的系统进程回执，无需另装 MockGeo 模块 APK。Root **0.1.0** 已在 Xiaomi 15 / Android 16 / KernelSU 上完成真实系统定位验收；本版 **0.1.6** 的独立进程加载与 8 项钩子检查通过，尚未单独完成纯 Root 接管系统服务的复测。当前拒绝与驻留的 LSPosed ART 框架叠加运行，需要先停用 LSPosed 注入并手动重启，或继续使用 LSPosed 模式。Root 路径暂不覆盖应用进程内传感器/SDK 缓存钩子。
 - **标准模式 (`provider`)**：无需 Root，通过 Android 系统「开发者选项 → 模拟位置信息应用」运行。
 
 ### 2. 深度无痕与多维环境证据链同步
@@ -37,7 +37,7 @@ LSPosed 模式提供下列可配置的模拟输出。系统接口验收不代表
 - **全通道定位覆盖**：同时接管 `GPS`、`Network`、`Fused（GMS/厂商融合定位）`、`Passive` 的 `getLastLocation`、`getCurrentLocation`、`requestLocationUpdates`（含 MIUI / HyperOS `LocationProviderManager.registerAndHandleIdentity` 代理对象精确拦截）以及内核 `WebView navigator.geolocation`。
 - **GNSS 卫星与 NMEA 报文合成**：动态合成 GPS (`L1 1575.42MHz`) + 北斗 Beidou (`B1I 1561.098MHz`) 双星座卫星状态（信噪比 `C/N0`、仰角、方位角、`usedInFix`）及 `$GPGGA` / `$GPRMC` 标准 NMEA 原始语句。
 - **虚拟基站与 Wi-Fi 扫描对齐**：根据当前模拟坐标确定性派生 4G LTE 基站小区（`MCC/MNC/TAC/CI/PCI` 与 `RSRP/RSRQ` 信号强度，兼容小米 `getBlurryCellInfos`）与周边 Wi-Fi 热点扫描列表。
-- **步频与运动传感器协同**：路线移动与摇杆控制期间同步驱动加速度计、陀螺仪、旋转矢量、地磁、线性加速度、重力共 6 类传感器微幅姿态响应。
+- **步频与运动传感器协同**：LSPosed 模式下可设置 0–300 步/分钟（0 为不指定），需模块 0.3.16 及对应应用作用域。移动期间调整运动波形和计步回调；依赖系统传感器事件，不直接修改运动平台历史步数，不保证第三方应用采信。
 
 ### 3. 为日常高频使用打磨的交互体验
 - **双地图引擎自由切换**：
@@ -55,19 +55,19 @@ LSPosed 模式提供下列可配置的模拟输出。系统接口验收不代表
 
 ## 📦 下载与安装
 
-当前版本：主应用 **0.4.8（通用包 39.15 MB）** · 内置 Root 载荷 **0.1.4** · 可选 LSPosed 模块 **0.3.15**。
+当前版本：主应用 **0.4.9（通用包 39.15 MB）** · 内置 Root 载荷 **0.1.6** · 可选 LSPosed 模块 **0.3.16**。
 
-本版修复“系统已加载模块却被判为未安装”的问题，增加 su 标准输入调用，并改进模块稳定性。小米 15 / Android 16 已完成新模块真机验收；原 Android 17 故障机的问题仍待分别验证。
+本版修复循环路线选择丢失，新增步频设置和本机定位诊断，细化高德授权及 Root 错误说明。小米 15 / Android 16 已完成新模块、循环和步频信号验收；原 vivo / Android 17 反馈机型及纯 Root 系统接管仍待分别验证。
 
-[下载 v0.4.8](https://github.com/jie8190/MockGeo/releases/tag/v0.4.8) · [更新日志](CHANGELOG.md) · [0.4.8 核验与未完成项](docs/VERIFICATION_0.4.8.md) · [体积优化](docs/APK_SIZE.md) · [定位与后台验证](docs/VERIFICATION_0.4.4.md)
+[下载最新版](https://github.com/jie8190/MockGeo/releases/latest) · [更新日志](CHANGELOG.md) · [0.4.9 核验与未完成项](docs/VERIFICATION_0.4.9.md) · [体积优化](docs/APK_SIZE.md) · [定位与后台验证](docs/VERIFICATION_0.4.4.md)
 
 | 安装包文件 | 包名 | 说明 |
 | :--- | :--- | :--- |
-| **`MockGeo-v0.4.8-app.apk`** | `com.mockgeo.app` | 通用 ARM 32/64 位主应用；Root 载荷已内置 |
-| **`MockGeo-v0.3.15-module.apk`** | `com.mockgeo.module` | 仅 LSPosed 模式需要；完整安装后手动重启 |
+| **`MockGeo-v0.4.9-app.apk`** | `com.mockgeo.app` | 通用 ARM 32/64 位主应用；Root 载荷已内置 |
+| **`MockGeo-v0.3.16-module.apk`** | `com.mockgeo.module` | 仅 LSPosed 模式需要；完整安装后手动重启 |
 | `SHA256SUMS.txt` | — | 主应用和 LSPosed 模块的 SHA-256 校验值 |
 
-从 0.4.7 或更早版本升级时，LSPosed 用户需同步更新模块 **0.3.15** 并手动重启；已经实际加载 0.3.15 的测试用户只更新主包即可。Root 用户只更新主包，若系统已加载旧载荷，需手动重启后再启动 0.1.4。保持原签名覆盖安装，无需卸载应用。
+从 0.4.8 或更早版本升级时，LSPosed 用户需同步更新模块 **0.3.16** 并手动重启；已经实际加载 0.3.16 的测试用户只更新主包即可，无需重复重启。Root 用户只更新主包，若系统已加载旧载荷，需手动重启后再启动 0.1.6。保持原签名覆盖安装，无需卸载应用。
 
 ### 快速上手
 
@@ -85,6 +85,8 @@ LSPosed 模式提供下列可配置的模拟输出。系统接口验收不代表
 1. 打开 `MockGeo` $\rightarrow$ **偏好设置** $\rightarrow$ **地图与图层** $\rightarrow$ 点击 **「自定义高德密钥 (可选)」**；
 2. 点击弹窗内的 **「查看申请 Key 所需的包名与签名信息」**，一键复制 `应用包名 (com.mockgeo.app)` 与 `签名 SHA1`；
 3. 前往 [高德开放平台控制台](https://lbs.amap.com/) 创建应用并绑定上述包名与 SHA1，获取免费的「Android 平台 SDK Key」粘贴回弹窗保存即可。
+
+请为 MockGeo **单独新增 Android 平台 Key**。包名/SHA1 校验与 Web 服务 Key 的“数字签名”开关不同，无需修改其他工具共用 Key 的签名设置；Web 服务或 JS Key 不能直接替代这里的 Android Key。
 
 ### 自定义 su 路径（临时 Root）
 
@@ -107,6 +109,10 @@ LSPosed 模式提供下列可配置的模拟输出。系统接口验收不代表
 遇到问题后，先复现，再进入 **偏好设置 → 诊断与反馈**（LSPosed 模式下，LSPosed 管理器日志中的 MockGeo 记录也很有帮助）：选择 **保存诊断日志** 下载文本附件，或选择 **邮件反馈（附日志）** 打开邮件草稿。日志包含设备与运行状态、当前进程的近期事件；已过滤地图 Key 等敏感字段，可先保存查看再发送。应用重启前的内存日志不会保留。
 
 联系邮箱：**kprxr.660@qq.com**。关于区域也提供邮件联系与复制邮箱。请在邮件中补充发生时间、现象和操作步骤；应用不会自动发送邮件。
+
+### 本机定位诊断（0.4.9 起）
+
+停止模拟后，可在 **偏好设置 → 诊断与反馈 → 本机定位采集** 手动读取坐标、精度、定位时间、来源、缓存年龄和模拟标记，并选择保存为 JSON。结果仅保留在当前会话，不自动上传，也不加入常规诊断日志。**文件包含精确坐标，分享前请自行检查。** 其他定位工具仍可能影响系统返回值，采集结果不保证是真实物理位置。
 
 ---
 

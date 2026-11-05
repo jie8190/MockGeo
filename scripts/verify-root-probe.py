@@ -70,6 +70,11 @@ try:
         time.sleep(0.2)
     if host_pid is None:
         raise RuntimeError("Probe VM did not become ready: " + root(f"cat {remote}/host.log", check=False))
+    host_maps = root(f"cat /proc/{host_pid}/maps").lower()
+    framework_present = "lsposed" in host_maps or "/lspd/" in host_maps
+    (output / "runtime.json").write_text(json.dumps(dict(
+        hostPid=host_pid, systemPid=system_pid, frameworkPresent=framework_present), indent=2), encoding="utf-8")
+    assert not framework_present, "This independent probe must not contain an injected LSPosed framework"
     print("Injecting only disposable probe PID", host_pid, flush=True)
     result = root(f"{remote}/loader {host_pid} {remote}/libmockgeo_root.so {remote}/payload.apk {nonce} probe", timeout=65)
     (output / "loader.json").write_text(result, encoding="utf-8")
@@ -104,4 +109,8 @@ finally:
         name = root(f"cat /proc/{host_pid}/cmdline", check=False).split("\0")[0]
         if name == "mockgeo-root-probe":
             root("kill " + str(host_pid), check=False)
+    for name in ("payload.apk", "libmockgeo_root.so", "loader", "host.pid", "heartbeat", "host.log",
+                 "receipt.json", "receipt.tmp", "host-complete"):
+        root("rm -f " + shlex.quote(remote + "/" + name), check=False)
+    root("rmdir " + shlex.quote(remote), check=False)
     print("Reports:", output, flush=True)

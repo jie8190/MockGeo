@@ -20,6 +20,7 @@ class ModuleConfig private constructor(
     val jitterMeters: Double,
     val reportIntervalMs: Long,
     val reportMock: Boolean = true,
+    val stepCadenceSpm: Int = 0,
 ) {
 
     fun with(
@@ -36,6 +37,7 @@ class ModuleConfig private constructor(
         jitterMeters: Double = this.jitterMeters,
         reportIntervalMs: Long = this.reportIntervalMs,
         reportMock: Boolean = this.reportMock,
+        stepCadenceSpm: Int = this.stepCadenceSpm,
     ): ModuleConfig = ModuleConfig(
         enabled = enabled,
         revision = revision,
@@ -50,6 +52,7 @@ class ModuleConfig private constructor(
         jitterMeters = jitterMeters,
         reportIntervalMs = reportIntervalMs,
         reportMock = reportMock,
+        stepCadenceSpm = stepCadenceSpm,
     )
 
     companion object {
@@ -118,6 +121,7 @@ class ModuleConfig private constructor(
             require(next.speedMps.isFinite() && next.speedMps >= 0 && next.bearingDeg.isFinite())
             require(next.satellites in 0..64 && next.jitterMeters.isFinite() && next.jitterMeters >= 0)
             require(next.reportIntervalMs in 200L..5000L)
+            require(next.stepCadenceSpm in 0..300)
             current = next
             leaseExpiresAtMs = if (next.enabled) nowMs + LEASE_TIMEOUT_MS else 0L
             return next

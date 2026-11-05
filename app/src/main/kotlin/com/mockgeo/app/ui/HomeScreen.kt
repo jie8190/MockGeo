@@ -328,7 +328,9 @@ private fun MapHome(vm: HomeViewModel) {
                         Spacer(Modifier.height(14.dp))
                         LinearProgressIndicator(progress = { sim.routeProgress.toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(4.dp))
                         Row(Modifier.fillMaxWidth().padding(top = 7.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("${distanceLabel(sim.routeDistanceM * sim.routeProgress)} / ${distanceLabel(sim.routeDistanceM)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("${distanceLabel(sim.routeDistanceM * sim.routeProgress)} / ${distanceLabel(sim.routeDistanceM)}" +
+                                if (sim.routeMode == com.mockgeo.core.model.RouteMode.LOOP) " · 已循环 ${sim.completedLaps} 圈" else "",
+                                modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text("%.1f km/h".format(sim.currentSpeedMps * 3.6), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         }
                     }
@@ -451,7 +453,8 @@ internal fun distanceLabel(meters: Double): String = if (meters >= 1000) "%.2f k
 internal fun errorLabel(failed: EngineState.Failed): String = when (failed.reason) {
     com.mockgeo.core.model.SimError.MOCK_APPOP_DENIED -> "请在开发者选项中将 MockGeo 设为模拟位置应用"
     com.mockgeo.core.model.SimError.PERMISSION_DENIED -> "定位权限未开启，点击查看设置"
-    com.mockgeo.core.model.SimError.MODULE_UNREACHABLE -> "无法连接 LSPosed 模块，请检查激活状态"
+    com.mockgeo.core.model.SimError.MODULE_UNREACHABLE -> failed.detail?.takeIf { it.isNotBlank() }
+        ?: "无法连接系统定位服务，点击查看诊断"
     com.mockgeo.core.model.SimError.ACK_TIMEOUT -> "引擎响应超时，请查看诊断后重试"
     else -> failed.detail ?: "模拟启动失败，请查看诊断后重试"
 }

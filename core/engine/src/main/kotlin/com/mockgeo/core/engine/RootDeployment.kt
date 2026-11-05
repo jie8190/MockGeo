@@ -83,7 +83,11 @@ class RootDeployment(private val context: Context, private val suPath: suspend (
         val nonce = UUID.randomUUID().toString().replace("-", "")
         // The loader has its own per-call deadlines and restores the traced thread before exiting.
         // The outer deadline is longer than all of those deadlines combined.
-        shell.run("$release/loader $pid $release/libmockgeo_root.so $release/payload.apk $nonce system", 90_000)
+        try {
+            shell.run("$release/loader $pid $release/libmockgeo_root.so $release/payload.apk $nonce system", 90_000)
+        } catch (error: IllegalStateException) {
+            throw IllegalStateException(RootLoadFailure.describe(error.message.orEmpty()), error)
+        }
         var receipt: JSONObject? = null
         repeat(40) {
             if (receipt == null) {

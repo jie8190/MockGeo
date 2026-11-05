@@ -11,6 +11,7 @@ internal data class ScopeState(
     val elapsedMs: Long = -1, val bootCount: Int = -1, val session: Long = 0,
     val altitude: Double = 0.0, val bearing: Float = 0f,
     val exempt: Set<String> = emptySet(),
+    val stepCadenceSpm: Int = 0,
 ) {
     /** 当前包是否应被注入（模拟开启且不在豁免名单）。 */
     fun activeFor(packageName: String?): Boolean =
@@ -72,7 +73,9 @@ internal object AppScopeConfig {
             val value = match.groupValues[2].toDoubleOrNull()?.takeIf { it.isFinite() } ?: return null
             if (fields.put(match.groupValues[1], value) != null) return null
         }
-        if (fields.keys != KEYS) return null
+        if (fields.keys != KEYS && fields.keys != KEYS + "cad") return null
+        val cadence = fields["cad"] ?: 0.0
+        if (cadence !in 0.0..300.0 || cadence % 1.0 != 0.0) return null
         fun n(key: String) = fields.getValue(key)
         fun integer(key: String) = n(key) % 1.0 == 0.0
         if (n("e") !in listOf(0.0, 1.0) || n("h") !in listOf(0.0, 1.0) ||
@@ -83,7 +86,7 @@ internal object AppScopeConfig {
             listOf("sat", "boot", "et", "ts", "session").any { !integer(it) }) return null
         ScopeState(n("e") == 1.0, n("h") == 1.0, n("lat"), n("lng"), n("spd").toFloat(),
             n("sat").toInt(), n("ts").toLong(), n("et").toLong(), n("boot").toInt(),
-            n("session").toLong(), n("alt"), n("brg").toFloat(), exempt)
+            n("session").toLong(), n("alt"), n("brg").toFloat(), exempt, cadence.toInt())
     }.getOrNull()
 
     private val X_FIELD = Regex("\"x\"\\s*:\\s*\"([^\"]*)\"")

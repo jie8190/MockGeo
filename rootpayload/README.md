@@ -4,18 +4,20 @@ This APK is an internal Dex payload embedded in the main app. It is not an LSPos
 Magisk, or KernelSU module, and is not installed as a separate Android app.
 
 The loader is restricted to `system_server` or the disposable `mockgeo-root-probe`
-process. It restores the traced thread's registers and detaches after starting a
+and `com.mockgeo.probe:rootcompat` test processes. It restores the traced thread's registers and detaches after starting a
 native worker. The worker loads this APK, initializes LSPlant and installs the
 shared recipient-specific location hooks. A Root-specific command provider and
 process/version/nonce checks keep LSPosed receipts from satisfying Root startup.
 
 The first implementation targets ARM64. Do not inject alongside an existing
 LSPosed ART runtime. Payload 0.1.0 passed system acceptance on Xiaomi 15 / Android 16 / KernelSU with LSPosed absent.
-App 0.4.8 embeds payload 0.1.4. Its DEX stays unminified, redundant JNI packaging is removed, and native distribution copies have debug data stripped after validating all runtime sections and program headers.
+App 0.4.9 embeds payload 0.1.6. Its DEX stays unminified, redundant JNI packaging is removed, and native distribution copies have debug data stripped after validating all runtime sections and program headers.
 
-Payload 0.1.4 adds a complete command receipt and shared Java hook stability changes. The native loader is unchanged. Its pure-Root system acceptance remains pending; see [0.4.8 verification](../docs/VERIFICATION_0.4.8.md).
+Payload 0.1.6 adds loader error stages/errno, cadence protocol support and isolated test coverage. The loader changed; the hook library's runtime sections match 0.4.8. Its pure-Root system acceptance remains pending; see [0.4.9 verification](../docs/VERIFICATION_0.4.9.md).
 The exact packaged payload passed loading into a disposable process and eight ART checks on Xiaomi 15 / Android 16. Full pure-Root system_server acceptance with LSPosed absent remains pending; do not equate the isolated result with system acceptance.
 Other ROMs and app-process sensor hooks are outside the verified scope.
+
+The LSPosed coexistence experiment was withdrawn after an overlapping-hook test crashed the disposable app process. Both the app and payload still reject system injection alongside a resident LSPosed runtime. The internal test process entry is not a supported system coexistence mode.
 
 ## Build
 
@@ -61,9 +63,9 @@ Dobby is pinned to its complete Android implementation at `9c85e74f`.
 
 ## Current verification
 
-Published distribution: main app 0.4.8 / Root payload 0.1.4. Shared hooks were tested through
-LSPosed module 0.3.15 on the Android 16 device, and the exact 0.1.4 payload passed isolated-process checks; full pure-Root system verification remains pending.
-See [the compatibility report](../docs/VERIFICATION_0.4.8.md). The following is historical 0.1.0 evidence.
+Published distribution: main app 0.4.9 / Root payload 0.1.6. Shared hooks were tested through
+LSPosed module 0.3.16 on the Android 16 device, and the exact 0.1.6 payload passed isolated-process checks; full pure-Root system verification remains pending.
+See [the compatibility report](../docs/VERIFICATION_0.4.9.md). The following is historical 0.1.0 evidence.
 
 Main app 0.4.3 / Root payload 0.1.0: build, 166 JVM/debug tests and Lint pass.
 Two disposable-VM runs on the Android 16 ARM64 device passed real remote loading,

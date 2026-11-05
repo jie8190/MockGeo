@@ -202,7 +202,7 @@ internal fun RoutePanel(vm: HomeViewModel, onEditMap: () -> Unit, onPreview: (Li
     val settings by vm.settings.collectAsState()
     val sim by vm.sim.collectAsState()
     val context = LocalContext.current
-    var mode by rememberSaveable { mutableStateOf(RouteMode.ONCE) }
+    val mode by vm.routeMode.collectAsState()
     var nameOpen by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf<Route?>(null) }
     var delete by remember { mutableStateOf<Route?>(null) }
@@ -280,7 +280,7 @@ internal fun RoutePanel(vm: HomeViewModel, onEditMap: () -> Unit, onPreview: (Li
         item {
             SectionLabel("移动方式")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                RouteMode.entries.forEach { option -> FilterChip(selected = mode == option, onClick = { mode = option }, label = { Text(routeModeLabel(option)) }) }
+                RouteMode.entries.forEach { option -> FilterChip(selected = mode == option, onClick = { vm.setRouteMode(option) }, label = { Text(routeModeLabel(option)) }) }
             }
             SettingSlider("移动速度", "%.1f km/h".format(settings.routeSpeedMps * 3.6), (settings.routeSpeedMps * 3.6).toFloat(), .5f..108f) { vm.setRouteSpeed(it / 3.6) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -309,7 +309,7 @@ internal fun RoutePanel(vm: HomeViewModel, onEditMap: () -> Unit, onPreview: (Li
             Surface(shape = RoundedCornerShape(17.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
                 Column(Modifier.padding(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f).clickable { vm.loadRoute(route); mode = route.mode; onPreview(route.points.map { LatLng(it.lat, it.lng) }) }) {
+                        Column(Modifier.weight(1f).clickable { vm.loadRoute(route); onPreview(route.points.map { LatLng(it.lat, it.lng) }) }) {
                             Text(route.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1)
                             Text("${distanceLabel(route.distanceM)} · ${route.points.size} 点 · ${routeModeLabel(route.mode)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 5.dp))
                         }
@@ -317,7 +317,7 @@ internal fun RoutePanel(vm: HomeViewModel, onEditMap: () -> Unit, onPreview: (Li
                         IconButton(onClick = { delete = route }) { Icon(Icons.Default.DeleteOutline, "删除路线", Modifier.size(19.dp)) }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        TextButton(onClick = { vm.loadRoute(route); mode = route.mode; onPreview(route.points.map { LatLng(it.lat, it.lng) }) }) { Text("加载预览") }
+                        TextButton(onClick = { vm.loadRoute(route); onPreview(route.points.map { LatLng(it.lat, it.lng) }) }) { Text("加载预览") }
                         TextButton(onClick = { vm.startSavedRoute(context, route); onStart() }, enabled = canStart) { Icon(Icons.Default.PlayArrow, null, Modifier.size(17.dp)); Text("开始") }
                     }
                 }

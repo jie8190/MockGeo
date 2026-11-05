@@ -178,11 +178,20 @@ fun SettingsDialog(vm: HomeViewModel, onDismiss: () -> Unit) {
             Text(if (idle) {
                 when (settings.engineId) {
                     "provider" -> "在系统「开发者选项 → 选择模拟位置信息应用」中选中 MockGeo 即可使用。"
-                    "root" -> "首次开始时加载 Root 组件。若系统仍驻留 LSPosed，请先停用框架注入并手动重启；应用内传感器兼容项暂不支持。"
+                    "root" -> "首次开始时加载 Root 组件。若已安装 LSPosed，可启用 MockGeo 模块并选择 LSPosed 模式，无需关闭框架。当前独立 Root 加载器尚未支持与其叠加注入；应用内传感器兼容项暂不支持。"
                     else -> "启用 MockGeo 模块后生效，全局接管定位请求。"
                 }
             } else "正在模拟位置中，停止模拟后可切换运行模式。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             RootPreferences(vm, idle)
+            Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (settings.engineId == "xposed") {
+                        SettingSlider("模拟步频", if (settings.stepCadenceSpm == 0) "不指定" else "${settings.stepCadenceSpm} 步/分钟",
+                            settings.stepCadenceSpm.toFloat(), 0f..300f, defaultValue = 0f, unit = "步/分钟") { vm.setStepCadence(it.toInt()) }
+                    } else Text("模拟步频仅支持 LSPosed 模式", style = MaterialTheme.typography.titleSmall)
+                    Text("需模块 0.3.16 及应用作用域，移动时作用于传感器回调；0 为保留默认运动波形、不覆盖计步回调。依赖系统传感器事件，不修改运动平台记录，也不保证第三方计步结果。", style = MaterialTheme.typography.bodySmall)
+                }
+            }
             if (settings.engineId == "xposed" || settings.engineId == "root") {
                 Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)) {
                     Box(Modifier.padding(16.dp)) {
@@ -217,6 +226,7 @@ fun SettingsDialog(vm: HomeViewModel, onDismiss: () -> Unit) {
                 }
             }
             SectionLabel("诊断与反馈")
+            LocalLocationCard(vm)
             DiagnosticExportCard(vm)
             SectionLabel("关于 MockGeo")
             ContactCard(vm)
@@ -288,7 +298,9 @@ fun DiagnosticsDialog(vm: HomeViewModel, onDismiss: () -> Unit) {
             BackgroundRunGuide(vm)
             checks.forEach { check ->
                 Surface(shape = RoundedCornerShape(15.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
-                    Row(Modifier.fillMaxWidth().clickable(enabled = check.actionKey != "NONE" || !check.ok) { onCheck(check) }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().clickable(enabled = check.actionKey != "NONE" || !check.ok) {
+                        if (check.actionKey == "USE_XPOSED") vm.setEngine("xposed") else onCheck(check)
+                    }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(if (check.ok) Icons.Default.CheckCircle else Icons.Default.Info, null, Modifier.size(22.dp), tint = if (check.ok) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary)
                         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                             Text(check.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)

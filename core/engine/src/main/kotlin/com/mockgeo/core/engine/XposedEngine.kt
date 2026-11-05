@@ -263,6 +263,7 @@ class XposedEngine(
                         putDouble(ControlPlane.KEY_JITTER_METERS, cfg.jitterMeters)
                         putLong(ControlPlane.KEY_REPORT_INTERVAL_MS, 1000L)
                         putBoolean(ControlPlane.KEY_REPORT_MOCK, cfg.reportMock)
+                        putInt(ControlPlane.KEY_STEP_CADENCE, cfg.stepCadenceSpm)
                     }
                 }
                 val direct = sendCommand(ControlPlane.CMD_SET, extras)

@@ -31,6 +31,8 @@ class RouteSimulator(
     /** 是否已到达终点（ONCE 模式）。 */
     var finished = false
         private set
+    var completedLaps = 0L
+        private set
 
     init {
         require(points.size >= 2) { "route needs at least 2 points, got ${points.size}" }
@@ -87,7 +89,14 @@ class RouteSimulator(
         var remaining = speed * dtSeconds
         require(remaining.isFinite()) { "distance must be finite" }
         // Reduce whole cycles before consuming distance, including long background delays.
-        if (mode == RouteMode.LOOP) remaining %= totalDistance
+        if (mode == RouteMode.LOOP) {
+            val distance = traveled + remaining
+            require(distance.isFinite()) { "distance must be finite" }
+            val laps = kotlin.math.floor(distance / totalDistance).toLong()
+            completedLaps += laps.coerceAtMost(Long.MAX_VALUE - completedLaps)
+            traveled = distance % totalDistance
+            return position()
+        }
         if (mode == RouteMode.PING_PONG) remaining %= totalDistance * 2.0
         // 逐段消费位移，处理跨段/回绕/反向
         var guard = 0

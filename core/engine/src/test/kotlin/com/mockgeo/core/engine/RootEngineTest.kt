@@ -59,6 +59,7 @@ class RootEngineTest {
         val env = Environment(control)
         val engine = RootEngine(env, control, Channel(reachable = true), backgroundScope)
         assertThat(engine.selfCheck().single().ok).isFalse()
+        assertThat(engine.selfCheck().single().actionKey).isEqualTo("USE_XPOSED")
         assertThat(engine.start(cfg).isFailure).isTrue()
         assertThat(env.loads).isEqualTo(0)
         assertThat(control.starts).isEqualTo(0)

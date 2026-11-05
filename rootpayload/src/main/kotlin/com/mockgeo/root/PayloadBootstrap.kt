@@ -21,14 +21,14 @@ object PayloadBootstrap {
         return try {
             require(nonce.matches(Regex("[0-9a-f]{32}")))
             val loader = if (mode == "system") liveSystemLoader() else {
-                require(mode == "probe" && processName() == "mockgeo-root-probe")
+                require(mode == "probe" && processName() in setOf("mockgeo-root-probe", "com.mockgeo.probe:rootcompat"))
                 null
             }
             check(NativeHooks.initialize()) { "ART hook initialization failed" }
             val api = PlantBridge().also { bridge = it }
             if (mode == "probe") {
                 verifyProbe(api)
-                report.put("checks", 8)
+                report.put("checks", if (processName() == "com.mockgeo.probe:rootcompat") 11 else 8)
             } else {
                 ModuleRuntime.activateRoot(BuildConfig.VERSION_NAME, nonce)
                 ModuleConfig.loadedAtMs = System.currentTimeMillis()
@@ -98,6 +98,18 @@ object PayloadBootstrap {
         handle.unhook(); other.unhook()
         check(target.value(2, 7L, 1.5, "probe") == "probe:10.5")
         check(method.invoke(target, 2, 7L, 1.5, "probe") == "probe:10.5")
+        if (processName() == "com.mockgeo.probe:rootcompat") {
+            // This method is also intercepted by the probe's client-scope LSPosed module.
+            val location = android.location.Location("gps")
+            val flag = android.location.Location::class.java.getDeclaredMethod("isMock")
+            android.location.Location::class.java.getDeclaredMethod("setMock", Boolean::class.javaPrimitiveType)
+                .invoke(location, true)
+            check(flag.invoke(location) == true)
+            val overlap = api.hook(flag).intercept { !(it.proceed() as Boolean) }
+            check(flag.invoke(location) == false)
+            overlap.unhook()
+            check(flag.invoke(location) == true)
+        }
     }
 
     private fun writeReceipt(directory: String, report: JSONObject) {

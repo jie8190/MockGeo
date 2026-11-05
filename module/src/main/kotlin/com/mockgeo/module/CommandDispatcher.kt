@@ -79,6 +79,7 @@ object CommandDispatcher {
                 jitterMeters = if (b.containsKey(ControlPlane.KEY_JITTER_METERS)) b.getDouble(ControlPlane.KEY_JITTER_METERS) else old.jitterMeters,
                 reportIntervalMs = if (b.containsKey(ControlPlane.KEY_REPORT_INTERVAL_MS)) b.getLong(ControlPlane.KEY_REPORT_INTERVAL_MS) else old.reportIntervalMs,
                 reportMock = if (b.containsKey(ControlPlane.KEY_REPORT_MOCK)) b.getBoolean(ControlPlane.KEY_REPORT_MOCK) else old.reportMock,
+                stepCadenceSpm = if (b.containsKey(ControlPlane.KEY_STEP_CADENCE)) b.getInt(ControlPlane.KEY_STEP_CADENCE) else old.stepCadenceSpm,
             )
         }
         val accepted = applied.revision == rev

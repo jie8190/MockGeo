@@ -45,7 +45,7 @@ internal object SettingsJson {
             jitterEnabled = boolean(payload, "jitterEnabled"),
             jitterMeters = number(payload, "jitterMeters", 0.0..50.0),
             routeSpeedMps = number(payload, "routeSpeedMps", 0.1..30.0),
-            stepCadenceSpm = integer(payload, "stepCadenceSpm", 0..3000),
+            stepCadenceSpm = integer(payload, "stepCadenceSpm", 0..300),
             historyLimit = integer(payload, "historyLimit", 10..1000),
             screenKeepOn = boolean(payload, "screenKeepOn"),
             theme = theme,

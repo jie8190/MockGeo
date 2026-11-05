@@ -18,7 +18,8 @@ internal object SensorSynth {
 
     fun apply(type: Int, values: FloatArray, state: ScopeState, nowMs: Long, turnRate: Float = 0f): Boolean {
         if (!supports(type) || values.size < 3) return false
-        val phase = 2 * PI * 1.6 * nowMs / 1000.0
+        val frequency = if (state.stepCadenceSpm > 0) state.stepCadenceSpm / 60.0 else 1.6
+        val phase = 2 * PI * frequency * nowMs / 1000.0
         val amplitude = min(state.speed / 1.4f, 1f).coerceAtLeast(0f)
         val linear = floatArrayOf((0.04 * amplitude * sin(phase)).toFloat(),
             (0.04 * amplitude * cos(phase)).toFloat(), (0.35 * amplitude * sin(phase)).toFloat())

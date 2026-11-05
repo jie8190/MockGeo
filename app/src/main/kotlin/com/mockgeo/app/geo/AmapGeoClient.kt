@@ -261,8 +261,10 @@ class AmapGeoClient(context: Context) {
 
     private fun serviceError(code: Int): GeoServiceException {
         val reason = when (code) {
-            AMapException.CODE_AMAP_INVALID_USER_KEY, AMapException.CODE_AMAP_INVALID_USER_SCODE,
-            AMapException.CODE_AMAP_USERKEY_PLAT_NOMATCH, AMapException.CODE_AMAP_SIGNATURE_ERROR -> "服务授权或应用签名配置不匹配"
+            AMapException.CODE_AMAP_INVALID_USER_KEY -> "Key 无效或未开通所需服务，请为本应用单独创建 Android 平台 Key"
+            AMapException.CODE_AMAP_INVALID_USER_SCODE -> "Android Key 绑定的包名或 SHA1 不匹配，请按本应用密钥页面显示的信息填写"
+            AMapException.CODE_AMAP_USERKEY_PLAT_NOMATCH -> "Key 平台不匹配，本应用需要 Android 平台 Key，不能使用 Web 服务或 JS Key"
+            AMapException.CODE_AMAP_SIGNATURE_ERROR -> "请求签名校验失败，请核对 Key 平台；本应用使用 Android SDK，不需要为其他工具开启 Web 数字签名"
             AMapException.CODE_AMAP_DAILY_QUERY_OVER_LIMIT, AMapException.CODE_AMAP_ACCESS_TOO_FREQUENT -> "请求次数受限，请稍后重试"
             AMapException.CODE_AMAP_CLIENT_SOCKET_TIMEOUT_EXCEPTION, AMapException.CODE_AMAP_ENGINE_CONNECT_TIMEOUT,
             AMapException.CODE_AMAP_ENGINE_RETURN_TIMEOUT -> "服务连接超时"

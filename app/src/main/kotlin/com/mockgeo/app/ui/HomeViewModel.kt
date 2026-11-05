@@ -67,6 +67,32 @@ class HomeViewModel(
     val message: StateFlow<String?> = _message
     private val _diagnosticBusy = MutableStateFlow(false)
     val diagnosticBusy: StateFlow<Boolean> = _diagnosticBusy
+    private val _capturingLocation = MutableStateFlow(false)
+    val capturingLocation: StateFlow<Boolean> = _capturingLocation
+    private val _localLocationReport = MutableStateFlow<com.mockgeo.app.diagnostics.LocalLocationReport?>(null)
+    val localLocationReport: StateFlow<com.mockgeo.app.diagnostics.LocalLocationReport?> = _localLocationReport
+    private var locationCaptureJob: Job? = null
+
+    fun captureLocalLocation() {
+        if (_capturingLocation.value || sim.value.engineState != EngineState.Idle) return
+        _capturingLocation.value = true
+        _localLocationReport.value = null
+        locationCaptureJob = viewModelScope.launch {
+            try {
+                val report = com.mockgeo.app.diagnostics.LocalLocationCapture.collect(appContext)
+                if (sim.value.engineState == EngineState.Idle) _localLocationReport.value = report
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: SecurityException) { postMessage("采集需要系统定位权限，请在运行环境中授权") }
+            catch (_: Exception) { postMessage("本机定位采集失败，请检查系统定位开关后重试") }
+            finally { _capturingLocation.value = false }
+        }
+    }
+    fun cancelLocalLocationCapture() { locationCaptureJob?.cancel() }
+    fun clearLocalLocationCapture() { _localLocationReport.value = null }
+    fun exportLocalLocation(uri: Uri): String? {
+        val report = _localLocationReport.value ?: return "请先采集定位"
+        return writeGeneratedFile(uri, "本机定位记录已保存") { report.json() }
+    }
     private val _checkingRoot = MutableStateFlow(false)
     val checkingRoot: StateFlow<Boolean> = _checkingRoot
     private val _savingRootPath = MutableStateFlow(false)
@@ -81,6 +107,9 @@ class HomeViewModel(
     val routePlanned: StateFlow<Boolean> = _routePlanned
     private val _routeProfile = MutableStateFlow("drive")
     val routeProfile: StateFlow<String> = _routeProfile
+    private val _routeMode = MutableStateFlow(RouteMode.ONCE)
+    val routeMode: StateFlow<RouteMode> = _routeMode
+    fun setRouteMode(mode: RouteMode) { _routeMode.value = mode }
     private var detailedDraft = emptyList<RoutePoint>()
     private var controlDetails = emptyList<RoutePoint>()
     private var draftRevision = 0L
@@ -173,6 +202,7 @@ class HomeViewModel(
     fun deleteHistory(id: Long) = work { repo.deleteHistory(id) }
 
     private suspend fun prepareStart(): AppSettings? {
+        if (_capturingLocation.value) { postMessage("请等待本机定位采集结束或取消采集后再开始模拟"); return null }
         if (_savingRootPath.value) { postMessage("正在保存 su 路径，请稍后开始"); return null }
         (appContext.applicationContext as com.mockgeo.app.MockGeoApp).ready.await()
         val prefs = settingsRepo.settings.first()
@@ -298,6 +328,7 @@ class HomeViewModel(
         repo.saveDetailedRoute(name.trim().ifBlank { "路线 ${routes.value.size + 1}" }, detailedDraft, mode, routeControls.value, routeProfile.value)
     }
     fun loadRoute(route: Route) {
+        _routeMode.value = route.mode
         _routeProfile.value = route.profile
         replaceDraft(route.points.map { LatLng(it.lat, it.lng) }, route.points, route.controlPoints)
         routeDraft.value.firstOrNull()?.let { select(it); setSelectedName(route.name) }
@@ -357,6 +388,7 @@ class HomeViewModel(
     fun setRouteSpeed(mps: Double) = work { settingsRepo.setRouteSpeed(mps.coerceIn(0.1, 30.0)) }
     fun setAltitude(m: Double) = work { settingsRepo.setAltitude(m.coerceIn(-500.0, 9000.0)) }
     fun setSatellites(n: Int) = work { settingsRepo.setSatellites(n.coerceIn(0, 64)) }
+    fun setStepCadence(spm: Int) = work { settingsRepo.setStepCadence(spm.coerceIn(0, 300)) }
     fun setNetworkProviderToo(too: Boolean) = work { settingsRepo.setNetworkProviderToo(too) }
     fun setSineCurve(on: Boolean) = work { settingsRepo.setSineCurve(on) }
     fun resetParametersToDefault() = work("已恢复默认模拟参数") {
@@ -536,6 +568,9 @@ class HomeViewModel(
             "运行引擎" to router.currentEngineId,
             "引擎状态" to DiagnosticReport.stateLabel(ui.engineState),
             "模拟模式" to ui.mode.name,
+            "模拟步频" to "${settings.value.stepCadenceSpm} 步/分钟（0 表示不指定）",
+            "路线循环方式" to ui.routeMode.name,
+            "已完成循环圈数" to ui.completedLaps.toString(),
             "暂停移动" to ui.paused.toString(),
             "标准电池优化豁免" to power.isIgnoringBatteryOptimizations(appContext.packageName).toString(),
             "系统省电模式" to power.isPowerSaveMode.toString(),

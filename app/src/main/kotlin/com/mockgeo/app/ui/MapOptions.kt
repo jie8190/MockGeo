@@ -133,6 +133,8 @@ internal fun AmapKeyConfigDialog(
         title = { Text("高德地图独立密钥") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("请单独创建 Android 平台 Key，绑定下方本应用的包名与 SHA1。地图、地点搜索和道路规划使用同一个 Android Key。", style = MaterialTheme.typography.bodySmall)
+                Text("这与 Web 服务的“数字签名”开关不同。无需更改其他工具共用 Key 的签名设置，也不要把 Web 服务或 JS Key 填入此处。", style = MaterialTheme.typography.bodySmall)
                 Text(
                     if (hasBuiltInKey) "可填入个人高德 Key，使用自己的搜索与路线规划配额。"
                     else "此安装包未内置高德 Key。填写个人 Android SDK Key 后可启用高德地图、搜索与路线规划。",
@@ -143,7 +145,7 @@ internal fun AmapKeyConfigDialog(
                     value = keyInput,
                     onValueChange = { keyInput = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("个人高德 Key") },
+                    label = { Text("Android 平台 Key") },
                     placeholder = { Text(if (hasBuiltInKey) "留空则使用默认内置服务" else "粘贴 32 位高德 Key") },
                     singleLine = true,
                     isError = !validFormat,

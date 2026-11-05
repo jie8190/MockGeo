@@ -25,6 +25,11 @@
 
 namespace {
 using Clock = std::chrono::steady_clock;
+std::runtime_error systemError(const char* operation) {
+    const int code = errno;
+    return std::runtime_error(std::string(operation) + " failed; errno=" +
+        std::to_string(code) + " (" + strerror(code) + ")");
+}
 std::string read(const std::string& path) {
     std::ifstream file(path, std::ios::binary);
     if (!file) throw std::runtime_error("cannot read " + path);
@@ -67,6 +72,7 @@ uintptr_t remoteSymbol(pid_t pid, void* address) {
 class Trace {
     pid_t pid_;
     bool attached_ = false, stopped_ = false, saved_ = false;
+    bool registersModified_ = false;
     user_pt_regs regs_{};
     user_fpsimd_state fp_{};
     bool fpSaved_ = false;
@@ -82,7 +88,7 @@ class Trace {
                 if (!WIFSTOPPED(status)) throw std::runtime_error("target exited during attach");
                 stopped_ = true; return WSTOPSIG(status);
             }
-            if (result < 0 && errno != EINTR) throw std::runtime_error("waitpid failed");
+            if (result < 0 && errno != EINTR) throw systemError("waitpid");
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
         } while (Clock::now() < until);
         throw std::runtime_error("remote call timed out");
@@ -100,10 +106,10 @@ class Trace {
 public:
     explicit Trace(pid_t pid) : pid_(pid) {
         if (ptrace(PTRACE_SEIZE, pid_, nullptr, nullptr) != 0)
-            throw std::runtime_error(std::string("ptrace denied: ") + strerror(errno));
+            throw systemError("PTRACE_SEIZE");
         attached_ = true;
         try {
-            if (ptrace(PTRACE_INTERRUPT, pid_, nullptr, nullptr) != 0) throw std::runtime_error("interrupt failed");
+            if (ptrace(PTRACE_INTERRUPT, pid_, nullptr, nullptr) != 0) throw systemError("PTRACE_INTERRUPT before remote execution");
             waitStop(3000); getRegs(regs_); saved_ = true;
             iovec io{&fp_, sizeof(fp_)};
             fpSaved_ = ptrace(PTRACE_GETREGSET, pid_, (void*)NT_PRFPREG, &io) == 0 && io.iov_len == sizeof(fp_);
@@ -124,7 +130,7 @@ public:
             ptrace(PTRACE_INTERRUPT, pid_, nullptr, nullptr);
             try { waitStop(3000); } catch (...) { ok = false; }
         }
-        if (stopped_ && saved_) {
+        if (stopped_ && saved_ && registersModified_) {
             if (errnoAddress_) {
                 try { writeMemory(errnoAddress_, &errnoValue_, sizeof(errnoValue_)); } catch (...) { ok = false; }
             }
@@ -138,9 +144,14 @@ public:
                 if (ptrace(PTRACE_SETREGSET, pid_, (void*)0x405, &io) != 0) ok = false;
             }
         }
-        if (ptrace(PTRACE_DETACH, pid_, nullptr, nullptr) != 0) ok = false;
+        if (ptrace(PTRACE_DETACH, pid_, nullptr, nullptr) != 0) {
+            const int code = errno;
+            fprintf(stderr, "MockGeo loader: PTRACE_DETACH failed; errno=%d (%s)\n", code, strerror(code));
+            ok = false;
+        }
         attached_ = false;
-        if (!ok) fprintf(stderr, "MockGeo loader: target restoration failed\n");
+        if (!ok) fprintf(stderr, "MockGeo loader: %s\n", registersModified_ ?
+            "target restoration failed after register modification" : "attach cleanup not confirmed; no remote code executed");
         return ok;
     }
     uintptr_t call(uintptr_t entry, std::initializer_list<uintptr_t> args) {
@@ -150,6 +161,7 @@ public:
         call.pc = entry;
         call.regs[30] = 0; // return traps before any instruction; never delivered to the target
         call.sp &= ~uintptr_t(15);
+        registersModified_ = true;
         setRegs(call);
         if (ptrace(PTRACE_CONT, pid_, nullptr, nullptr) != 0) throw std::runtime_error("continue failed");
         stopped_ = false;
@@ -198,7 +210,9 @@ int main(int argc, char** argv) {
         auto cmdline = read("/proc/" + std::to_string(pid) + "/cmdline");
         cmdline.resize(cmdline.find('\0'));
         if (!((mode == "system" && cmdline == "system_server") ||
-              (mode == "probe" && cmdline == "mockgeo-root-probe"))) throw std::runtime_error("target is not a MockGeo loader target");
+              (mode == "probe" && (cmdline == "mockgeo-root-probe" ||
+                                    cmdline == "com.mockgeo.probe:rootcompat"))))
+            throw std::runtime_error("target is not a MockGeo loader target");
         const std::string library = canonical(argv[2]), payload = canonical(argv[3]);
         struct stat st{};
         for (const auto& path : {library, payload}) {

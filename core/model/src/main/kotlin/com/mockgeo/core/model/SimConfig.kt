@@ -20,12 +20,14 @@ data class SimConfig(
     val networkProviderToo: Boolean = false,
     /** LSPosed output format only; official test providers always retain Android's mock flag. */
     val reportMock: Boolean = true,
+    val stepCadenceSpm: Int = 0,
 ) {
     init {
         require(accuracyM > 0f) { "accuracy must be > 0" }
         require(satellites in 0..64) { "satellites out of range: $satellites" }
         require(jitterMeters >= 0.0) { "jitterMeters must be >= 0" }
         require(speedMps >= 0f) { "speed must be >= 0" }
+        require(stepCadenceSpm in 0..300) { "step cadence must be 0..300" }
     }
 
     fun withPosition(position: LatLng, bearingDeg: Float? = null): SimConfig = copy(

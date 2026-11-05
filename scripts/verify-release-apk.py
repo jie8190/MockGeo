@@ -44,6 +44,8 @@ def main():
     parser.add_argument('--baseline', required=True, type=Path)
     parser.add_argument('--abis', default='arm64-v8a,armeabi-v7a')
     parser.add_argument('--report', required=True, type=Path)
+    parser.add_argument('--allow-root-loader-change', action='store_true',
+                        help='Allow an intentionally updated loader, while verifying the shared library runtime and stripped state')
     args = parser.parse_args()
     project = Path(__file__).resolve().parent.parent
     sdk = Path(os.environ.get('ANDROID_HOME') or os.environ['ANDROID_SDK_ROOT'])
@@ -115,6 +117,7 @@ def main():
         assert not any(n.startswith('Landroidx/compose/ui/tooling/ComposeViewAdapter') for n in names)
         props = dict(line.split('=', 1) for line in apk.read('assets/root/manifest.properties').decode().splitlines()
                      if line and not line.startswith('#'))
+        native_changes = []
         for name in ('payload.apk', 'libmockgeo_root.so', 'loader'):
             data = apk.read('assets/root/' + name)
             assert hashlib.sha256(data).hexdigest() == props[name], 'Root artifact digest mismatch'
@@ -125,7 +128,10 @@ def main():
                 original.write_bytes(baseline.read('assets/root/' + name))
                 old_sections, old_segments, _ = elf_runtime(original)
                 sections, segments, debug = elf_runtime(target)
-                assert old_sections == sections and old_segments == segments and not debug, 'Root runtime changed'
+                assert not debug, 'Root artifact contains debug sections'
+                if old_sections != sections or old_segments != segments:
+                    assert name == 'loader' and args.allow_root_loader_change, 'Unexpected Root runtime change'
+                    native_changes.append(name)
         payload_manifest = manifest(directory / 'payload.apk')
         assert re.search(r'android:versionName[^\n]*"' + re.escape(props['version']) + '"', payload_manifest)
         with ZipFile(directory / 'payload.apk') as payload:
@@ -138,7 +144,8 @@ def main():
                       baselineBytes=args.baseline.stat().st_size, certificate=cert, debuggable=False,
                       abis=sorted(abis), compressedNativeLibraries=True, privateKeyAbsent=True,
                       compressedGroups=dict(groups), iconClasses=icons, rootVersion=props['version'],
-                      rootNativeRuntimeUnchanged=True, thirdPartyNativeBinariesUnchanged=True,
+                      rootNativeRuntimeUnchanged=not native_changes, rootNativeChangedArtifacts=native_changes,
+                      thirdPartyNativeBinariesUnchanged=True,
                       rootArtifactsVerified=True, deviceTested=False)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(result, indent=2), encoding='utf-8')

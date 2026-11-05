@@ -85,7 +85,7 @@ class SettingsRepository internal constructor(private val store: DataStore<Prefe
             jitterEnabled = p[Keys.JITTER_ON] ?: false,
             jitterMeters = p[Keys.JITTER_M] ?: 0.0,
             routeSpeedMps = p[Keys.ROUTE_SPEED] ?: 1.4,
-            stepCadenceSpm = p[Keys.CADENCE] ?: 0,
+            stepCadenceSpm = (p[Keys.CADENCE] ?: 0).coerceIn(0, 300),
             historyLimit = p[Keys.HISTORY_LIMIT] ?: 100,
             screenKeepOn = p[Keys.KEEP_ON] ?: false,
             theme = p[Keys.THEME] ?: "system",
@@ -154,6 +154,11 @@ class SettingsRepository internal constructor(private val store: DataStore<Prefe
     suspend fun setSatellites(n: Int) {
         require(n in 0..64) { "satellites out of range: $n" }
         store.edit { it[Keys.SATELLITES] = n }
+    }
+
+    suspend fun setStepCadence(spm: Int) {
+        require(spm in 0..300)
+        store.edit { it[Keys.CADENCE] = spm }
     }
 
     suspend fun setSineCurve(on: Boolean) = store.edit { it[Keys.SINE_CURVE] = on }

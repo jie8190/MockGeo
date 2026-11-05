@@ -46,6 +46,24 @@ class SimControllerTest {
     private val a = LatLng(39.9, 116.4)
     private val b = a.destination(90.0, 1000.0)
 
+    @Test fun `smooth loop continues through multiple endpoints and pauses without adding laps`() = runTest {
+        val sink = Sink(); val controller = controller(sink)
+        controller.updateSettings(AppSettings(sineSpeedCurve = true, jitterEnabled = false, stepCadenceSpm = 120))
+        controller.startRoute(listOf(a, a.destination(90.0, 12.0)), RouteMode.LOOP, 4.0)
+        runCurrent(); advanceTimeBy(60_000); runCurrent()
+        assertThat(controller.ui.value.completedLaps).isAtLeast(2)
+        assertThat(controller.ui.value.engineState).isInstanceOf(EngineState.Running::class.java)
+        assertThat(sink.snapshots.last().stepCadenceSpm).isEqualTo(120)
+        controller.pause(); runCurrent()
+        val laps = controller.ui.value.completedLaps
+        val position = controller.ui.value.currentPosition
+        advanceTimeBy(30_000); runCurrent()
+        assertThat(controller.ui.value.completedLaps).isEqualTo(laps)
+        assertThat(controller.ui.value.currentPosition).isEqualTo(position)
+        controller.resume(); runCurrent(); advanceTimeBy(60_000); runCurrent()
+        assertThat(controller.ui.value.completedLaps).isGreaterThan(laps)
+    }
+
     @Test fun `default smooth route moves and pause freezes without catch up`() = runTest {
         val sink = Sink(); val controller = controller(sink)
         controller.startRoute(listOf(a, b), RouteMode.ONCE, 5.0)

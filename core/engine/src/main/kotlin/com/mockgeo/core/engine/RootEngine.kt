@@ -42,13 +42,16 @@ class RootEngine(
         startupTimeoutMs = 90_000)
 
     override suspend fun selfCheck(): List<CheckResult> {
-        if (legacy.pingModule()) return listOf(CheckResult(CHECK_NAME, false, CONFLICT_REASON))
+        if (legacy.pingModule()) return listOf(CheckResult(CHECK_NAME, false,
+            "已检测到可用的 MockGeo LSPosed 通道。可直接切换 LSPosed 模式，无需关闭框架或重新注入。", "USE_XPOSED"))
         if (channel.pingModule()) {
             val status = channel.statusSnapshot()
             val valid = status != null && status.processId > 1 && status.moduleVersion == environment.version &&
                 RootReceipt(status.processId, status.instanceNonce, environment.version).matches(status)
             return listOf(CheckResult(CHECK_NAME, valid,
-                if (valid) "Root 系统定位钩子已加载" else "Root 载荷版本或回执不匹配，请手动重启后重试"))
+                if (valid && status?.enabled == true) "Root 系统定位钩子已加载，模拟运行中"
+                else if (valid) "Root 系统定位钩子已加载，但模拟尚未运行；返回地图选点并点击开始模拟"
+                else "Root 载荷版本或回执不匹配，请手动重启后重试"))
         }
         return environment.readiness() + CheckResult("Root 首次加载", true, "组件通过检查后，开始模拟时加载系统钩子")
     }
@@ -101,6 +104,6 @@ class RootEngine(
     companion object {
         const val ENGINE_ID = "root"
         const val CHECK_NAME = "Root 独立注入"
-        const val CONFLICT_REASON = "系统进程仍驻留 LSPosed。免框架 Root 直连需先停用 LSPosed 注入并手动重启，或继续选择 LSPosed 模式"
+        const val CONFLICT_REASON = "系统进程仍驻留 LSPosed，当前独立 Root 加载器未验证与其共存，不能叠加注入。安装并启用 MockGeo 模块后可选择 LSPosed 模式；仅需独立 Root 时才停用框架并手动重启"
     }
 }

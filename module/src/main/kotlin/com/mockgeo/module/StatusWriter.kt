@@ -120,6 +120,7 @@ object StatusWriter {
                 .put("lat", cfg.lat)
                 .put("lng", cfg.lng)
                 .put("spd", cfg.speedMps.toDouble())
+                .put("cad", cfg.stepCadenceSpm)
                 .put("sat", cfg.satellites)
                 .put("ts", System.currentTimeMillis())
                 .put("et", now)
@@ -156,5 +157,5 @@ object StatusWriter {
         }
     }
 
-    const val MODULE_VERSION = "0.3.15"
+    const val MODULE_VERSION = "0.3.16"
 }
